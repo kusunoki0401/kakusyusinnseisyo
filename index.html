@@ -1259,14 +1259,18 @@
             return GAS_WEB_APP_URL && GAS_WEB_APP_URL.startsWith("https://script.google.com");
         }
 
-        async function apiCall(action, payload = {}) {
+        async function apiCall(action, payload = {}, timeoutMs = 6000) {
             if (!isGasConfigured()) return null;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
             try {
                 const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action, ...payload })
+                    body: JSON.stringify({ action, ...payload }),
+                    signal: controller.signal
                 });
+                clearTimeout(timer);
                 const text = await response.text();
                 try {
                     const data = JSON.parse(text);
@@ -1276,12 +1280,11 @@
                     return data;
                 } catch (parseErr) {
                     console.error("GAS parse error:", text);
-                    showToast('通信エラー: サーバー応答の読み込みに失敗しました', 'fa-circle-exclamation text-amber-400');
                     return null;
                 }
             } catch (e) {
-                console.error("GAS API Error:", e);
-                showToast('通信エラー: ネットワークまたはURLを確認してください', 'fa-circle-exclamation text-amber-400');
+                clearTimeout(timer);
+                console.warn("GAS API Timeout/Error:", e.name || e);
                 return null;
             }
         }
@@ -1297,7 +1300,9 @@
                     return;
                 }
             }
-            loadLocalData();
+            if (!staffList || staffList.length === 0) {
+                loadLocalData();
+            }
             updateSyncBadge(false, 'ローカル保持中 (GAS通信未接続)');
         }
 
@@ -2327,8 +2332,9 @@
         }
 
         window.onload = function() {
-            fetchLatestData();
+            loadLocalData();
             setLoginMode('staff');
+            fetchLatestData();
         };
     </script>
 </body>
