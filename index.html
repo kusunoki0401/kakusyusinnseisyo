@@ -802,7 +802,7 @@
                 <button onclick="closeRegisterModal()" class="text-teal-100 hover:text-white text-xl font-bold">&times;</button>
             </div>
 
-            <form id="registerForm" onsubmit="handleStaffSave(event)" autocomplete="off" class="p-6 space-y-4 overflow-y-auto flex-1">
+            <form id="registerForm" onsubmit="handleStaffSave(event)" onkeydown="preventEnterSubmit(event)" autocomplete="off" class="p-6 space-y-4 overflow-y-auto flex-1">
                 <input type="hidden" id="editStaffTargetId" value="">
 
                 <div>
@@ -1940,22 +1940,22 @@
                 'bg-rose-600 hover:bg-rose-700 text-white',
                 'fa-trash-can',
                 async () => {
-                    if (isGasConfigured()) {
-                        const res = await apiCall("deleteRequest", { reqId });
-                        if (res && res.success) {
-                            showToast('申請データを削除しました', 'fa-trash-can text-rose-400');
-                            await fetchLatestData();
-                            renderAdminRequests();
-                            if (activeAdminSubTab === 'search') renderAdminSearchResults();
-                            return;
-                        }
-                    }
-
+                    // 0.1秒で画面・ローカルから即座に削除反映
                     requestList = requestList.filter(r => r.id !== reqId);
                     saveLocalData();
                     showToast('申請データを削除しました', 'fa-trash-can text-rose-400');
                     renderAdminRequests();
                     if (activeAdminSubTab === 'search') renderAdminSearchResults();
+
+                    // GASサーバー側にも非同期で削除反映
+                    if (isGasConfigured()) {
+                        apiCall("deleteRequest", { reqId }).then(() => {
+                            fetchLatestData().then(() => {
+                                renderAdminRequests();
+                                if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                            });
+                        });
+                    }
                 }
             );
         }
@@ -2057,17 +2057,47 @@
             document.getElementById('regCurrentGranted').value = granted;
         }
 
+        function preventEnterSubmit(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                return false;
+            }
+        }
+
         async function handleStaffSave(e) {
-            e.preventDefault();
-            const editId = document.getElementById('editStaffTargetId').value;
+            if (e) e.preventDefault();
+
+            const nameInput = document.getElementById('regName').value.trim();
             const rawPin = document.getElementById('regPin').value;
-            const formattedPin = normalizeNumber(rawPin) ? normalizeNumber(rawPin).padStart(4, '0') : '0123';
+            const pinInput = normalizeNumber(rawPin);
+            const hireDateInput = document.getElementById('regHireDate').value;
+
+            if (!nameInput) {
+                showToast('氏名を入力してください', 'fa-circle-exclamation text-amber-400');
+                document.getElementById('regName').focus();
+                return;
+            }
+
+            if (pinInput.length !== 4) {
+                showToast('暗証番号(PIN)は4桁の数字で入力してください', 'fa-circle-exclamation text-amber-400');
+                document.getElementById('regPin').focus();
+                return;
+            }
+
+            if (!hireDateInput) {
+                showToast('入社年月日を選択してください', 'fa-circle-exclamation text-amber-400');
+                document.getElementById('regHireDate').focus();
+                return;
+            }
+
+            const editId = document.getElementById('editStaffTargetId').value;
+            const formattedPin = pinInput.padStart(4, '0');
             const payload = {
                 id: editId,
-                name: document.getElementById('regName').value.trim(),
+                name: nameInput,
                 role: document.getElementById('regRole').value,
                 pin: formattedPin,
-                hireDate: document.getElementById('regHireDate').value,
+                hireDate: hireDateInput,
                 carriedOver: parseFloat(document.getElementById('regCarriedOver').value) || 0,
                 currentGranted: parseFloat(document.getElementById('regCurrentGranted').value) || 0,
                 used: parseFloat(document.getElementById('regUsed').value) || 0,
@@ -2079,13 +2109,14 @@
                 const res = await apiCall(actionName, payload);
                 if (res && res.success) {
                     closeRegisterModal();
-                    await fetchLatestData();
                     if (!editId && res.newId) {
                         showIssuedIdModal(res.newId);
                     } else {
                         showToast(res.message || 'スタッフ情報を保存しました');
                     }
-                    if (currentUser && currentUser.isAdmin) renderStaffTable();
+                    fetchLatestData().then(() => {
+                        if (currentUser && currentUser.isAdmin) renderStaffTable();
+                    });
                     return;
                 }
             }
@@ -2137,20 +2168,20 @@
             const btnColor = isRetire ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white';
 
             openConfirmDialog(title, desc, isRetire ? '退職にする' : '復職させる', btnColor, 'fa-user-slash', async () => {
-                if (isGasConfigured()) {
-                    const res = await apiCall("toggleRetireStaff", { id, status: targetStatus });
-                    if (res && res.success) {
-                        showToast(res.message || 'ステータスを変更しました');
-                        await fetchLatestData();
-                        renderStaffTable();
-                        return;
-                    }
-                }
-
+                // 0.1秒で画面・ローカルへ即時反映
                 staff.status = targetStatus;
                 saveLocalData();
                 showToast(`「${staff.name}」さんのステータスを【${targetStatus}】に変更しました`);
                 renderStaffTable();
+
+                // バックグラウンドでGASサーバー側にも同期
+                if (isGasConfigured()) {
+                    apiCall("toggleRetireStaff", { id, status: targetStatus }).then(() => {
+                        fetchLatestData().then(() => {
+                            renderStaffTable();
+                        });
+                    });
+                }
             });
         }
 
@@ -2165,20 +2196,20 @@
                 'bg-rose-600 hover:bg-rose-700 text-white',
                 'fa-trash-can',
                 async () => {
-                    if (isGasConfigured()) {
-                        const res = await apiCall("deleteStaff", { id });
-                        if (res && res.success) {
-                            showToast('スタッフデータを削除しました', 'fa-trash-can text-rose-400');
-                            await fetchLatestData();
-                            renderStaffTable();
-                            return;
-                        }
-                    }
-
+                    // 0.1秒で画面・ローカルから即時削除反映
                     staffList = staffList.filter(s => s.id !== id);
                     saveLocalData();
                     showToast('スタッフデータを削除しました', 'fa-trash-can text-rose-400');
                     renderStaffTable();
+
+                    // バックグラウンドでGASサーバー側にも同期削除
+                    if (isGasConfigured()) {
+                        apiCall("deleteStaff", { id }).then(() => {
+                            fetchLatestData().then(() => {
+                                renderStaffTable();
+                            });
+                        });
+                    }
                 }
             );
         }
@@ -2222,17 +2253,7 @@
                 return;
             }
 
-            if (isGasConfigured()) {
-                const res = await apiCall("processRequest", { reqId: selectedRequestId, action: selectedAction, comment });
-                if (res && res.success) {
-                    showToast(res.message || '処理を完了しました');
-                    closeActionModal();
-                    await fetchLatestData();
-                    renderAdminRequests();
-                    return;
-                }
-            }
-
+            // 0.1秒で即時ローカル画面へ判定反映
             const req = requestList.find(r => r.id === selectedRequestId);
             if (req) {
                 if (selectedAction === 'approve') {
@@ -2255,6 +2276,15 @@
 
             closeActionModal();
             renderAdminRequests();
+
+            // バックグラウンドでGASサーバーと同期
+            if (isGasConfigured()) {
+                apiCall("processRequest", { reqId: selectedRequestId, action: selectedAction, comment }).then(() => {
+                    fetchLatestData().then(() => {
+                        renderAdminRequests();
+                    });
+                });
+            }
         }
 
         function exportBackupData() {
