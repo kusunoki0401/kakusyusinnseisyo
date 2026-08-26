@@ -1259,7 +1259,7 @@
             return GAS_WEB_APP_URL && GAS_WEB_APP_URL.startsWith("https://script.google.com");
         }
 
-        async function apiCall(action, payload = {}, timeoutMs = 6000) {
+        async function apiCall(action, payload = {}, timeoutMs = 15000) {
             if (!isGasConfigured()) return null;
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -1291,31 +1291,45 @@
 
         async function fetchLatestData() {
             if (isGasConfigured()) {
-                const res = await apiCall("getAllData");
+                updateSyncBadge('syncing', '同期確認中...');
+                const res = await apiCall("getAllData", {}, 15000);
                 if (res && res.success) {
                     staffList = res.staffList || [];
                     requestList = res.requestList || [];
                     saveLocalData();
-                    updateSyncBadge(true);
+                    updateSyncBadge('online');
+                    if (currentUser) {
+                        if (currentUser.isAdmin) {
+                            if (activeAdminSubTab === 'requests') renderAdminRequests();
+                            else if (activeAdminSubTab === 'staff') renderStaffTable();
+                            else if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                        } else {
+                            refreshStaffCard();
+                            renderStaffRequests();
+                        }
+                    }
                     return;
                 }
             }
             if (!staffList || staffList.length === 0) {
                 loadLocalData();
             }
-            updateSyncBadge(false, 'ローカル保持中 (GAS通信未接続)');
+            updateSyncBadge('offline', 'ローカル保持中 (GAS通信未接続)');
         }
 
-        function updateSyncBadge(online, text) {
+        function updateSyncBadge(status, text) {
             const badge = document.getElementById('syncBadge');
-            if (badge) {
-                if (online) {
-                    badge.className = "bg-teal-800 text-teal-200 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
-                    badge.innerHTML = `<i class="fa-solid fa-cloud text-[9px]"></i> スプレッドシート連携中`;
-                } else {
-                    badge.className = "bg-amber-800 text-amber-200 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
-                    badge.innerHTML = `<i class="fa-solid fa-database text-[9px]"></i> ${text || 'ローカル保持中 (GAS未設定)'}`;
-                }
+            if (!badge) return;
+            
+            if (status === 'online' || status === true) {
+                badge.className = "bg-teal-800 text-teal-200 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
+                badge.innerHTML = `<i class="fa-solid fa-cloud text-[9px]"></i> スプレッドシート連携中`;
+            } else if (status === 'syncing') {
+                badge.className = "bg-teal-900/80 text-teal-100 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
+                badge.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin text-[9px]"></i> オンライン同期中...`;
+            } else {
+                badge.className = "bg-amber-800 text-amber-200 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
+                badge.innerHTML = `<i class="fa-solid fa-database text-[9px]"></i> ${text || 'ローカル保持中 (GAS未設定)'}`;
             }
         }
 
