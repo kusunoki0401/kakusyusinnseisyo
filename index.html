@@ -875,7 +875,7 @@
             <p id="actionModalDesc" class="text-xs text-slate-600">処理を確定してください。</p>
 
             <div id="remandCommentGroup" class="hidden">
-                <label class="block text-xs font-bold text-slate-700 mb-1">差し戻し理由・コメント <span class="text-red-500">*</span></label>
+                <label id="remandCommentLabel" class="block text-xs font-bold text-slate-700 mb-1">理由・コメント <span class="text-red-500">*</span></label>
                 <textarea id="remandComment" rows="3" placeholder="修正点や理由を入力してください" class="w-full border border-slate-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-amber-500"></textarea>
             </div>
 
@@ -1754,7 +1754,7 @@
                             ${statusBadge}
                         </div>
                         ${r.reason ? `<p class="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">理由: ${escapeHtml(r.reason)}</p>` : ''}
-                        ${r.remandComment ? `<p class="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 font-medium"><i class="fa-solid fa-comment-dots"></i> 差し戻しコメント: ${escapeHtml(r.remandComment)}</p>` : ''}
+                        ${r.remandComment ? `<p class="text-xs ${r.status === '却下' ? 'text-slate-700 bg-slate-100 border-slate-200' : 'text-rose-600 bg-rose-50 border-rose-100'} p-2 rounded-lg border font-medium"><i class="fa-solid fa-comment-dots"></i> ${r.status === '却下' ? '却下理由コメント' : '差し戻しコメント'}: ${escapeHtml(r.remandComment)}</p>` : ''}
                     </div>
                 `;
             }).join('');
@@ -1934,6 +1934,7 @@
                         </div>
 
                         ${r.reason ? `<div class="text-xs bg-slate-50 p-2.5 rounded-lg text-slate-700">理由: ${escapeHtml(r.reason)}</div>` : ''}
+                        ${r.remandComment ? `<div class="text-xs ${r.status === '却下' ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-rose-50 text-rose-700 border border-rose-100'} p-2.5 rounded-lg font-medium"><i class="fa-solid fa-comment-dots"></i> ${r.status === '却下' ? '却下理由コメント' : '差し戻しコメント'}: ${escapeHtml(r.remandComment)}</div>` : ''}
 
                         <div class="flex justify-end items-center space-x-2 pt-1">
                             ${r.status === '申請中' ? `
@@ -2239,23 +2240,34 @@
             const title = document.getElementById('actionModalTitle');
             const desc = document.getElementById('actionModalDesc');
             const commentGroup = document.getElementById('remandCommentGroup');
+            const commentLabel = document.getElementById('remandCommentLabel');
+            const commentInput = document.getElementById('remandComment');
             const confirmBtn = document.getElementById('confirmActionBtn');
+
+            commentInput.value = '';
 
             if (action === 'approve') {
                 title.textContent = '申請の承認';
                 desc.textContent = 'この届出を承認しますか？有休申請の場合は消化日数が自動的に引かれます。';
                 commentGroup.classList.add('hidden');
-                confirmBtn.className = 'flex-1 bg-teal-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+                confirmBtn.textContent = '承認する';
+                confirmBtn.className = 'flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-xs shadow';
             } else if (action === 'remand') {
                 title.textContent = '申請の差し戻し';
-                desc.textContent = 'スタッフへ修正依頼の差し戻しを行います。';
+                desc.textContent = 'スタッフへ修正依頼の差し戻しを行います。差し戻し理由を入力してください。';
+                if (commentLabel) commentLabel.innerHTML = '差し戻し理由・コメント <span class="text-red-500">*</span>';
+                commentInput.placeholder = '修正点や差し戻し理由を入力してください';
                 commentGroup.classList.remove('hidden');
-                confirmBtn.className = 'flex-1 bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+                confirmBtn.textContent = '差し戻す';
+                confirmBtn.className = 'flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 rounded-xl text-xs shadow';
             } else if (action === 'reject') {
                 title.textContent = '申請の却下';
-                desc.textContent = 'この届出を却下します。';
-                commentGroup.classList.add('hidden');
-                confirmBtn.className = 'flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+                desc.textContent = 'この届出を却下します。却下理由を入力してください。';
+                if (commentLabel) commentLabel.innerHTML = '却下理由・コメント <span class="text-red-500">*</span>';
+                commentInput.placeholder = '却下理由を入力してください（例: シフト調整不可、規定要件外など）';
+                commentGroup.classList.remove('hidden');
+                confirmBtn.textContent = '却下する';
+                confirmBtn.className = 'flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs shadow';
             }
 
             document.getElementById('actionModal').classList.remove('hidden');
@@ -2267,8 +2279,9 @@
 
         async function executeReqAction() {
             const comment = document.getElementById('remandComment').value.trim();
-            if (selectedAction === 'remand' && !comment) {
-                showToast('差し戻し理由を入力してください', 'fa-circle-exclamation text-amber-400');
+            if ((selectedAction === 'remand' || selectedAction === 'reject') && !comment) {
+                const actionText = selectedAction === 'remand' ? '差し戻し理由' : '却下理由';
+                showToast(`${actionText}を入力してください`, 'fa-circle-exclamation text-amber-400');
                 return;
             }
 
@@ -2288,6 +2301,7 @@
                     showToast('差し戻し処理を完了しました');
                 } else if (selectedAction === 'reject') {
                     req.status = '却下';
+                    req.remandComment = comment;
                     showToast('申請を却下しました', 'fa-circle-xmark text-rose-400');
                 }
                 saveLocalData();
