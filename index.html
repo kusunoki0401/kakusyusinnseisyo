@@ -2486,8 +2486,7 @@
                 const res = await apiCall("processRequest", payload);
 
                 if (res && res.success) {
-                    const msg = res.message || `申請を【${targetStatus}】処理し、スプレッドシートへ保存しました`;
-                    showToast(msg);
+                    showToast('保存しました');
                     await fetchLatestData();
                     renderAdminRequests();
                     renderStaffRequests();
@@ -2505,7 +2504,7 @@
                     showToast(`更新失敗: ${errorDetails} (スプレッドシート側の処理をご確認ください)`, 'fa-circle-exclamation text-rose-400');
                 }
             } else {
-                showToast(`申請を【${targetStatus}】処理しました (ローカル保存中)`);
+                showToast('保存しました');
             }
         }
 
