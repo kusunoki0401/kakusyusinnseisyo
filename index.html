@@ -1267,7 +1267,7 @@
                 const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action, ...payload }),
+                    body: JSON.stringify({ ...payload, action }),
                     signal: controller.signal
                 });
                 clearTimeout(timer);
@@ -2320,7 +2320,7 @@
 
             // バックグラウンドでGASサーバーと同期
             if (isGasConfigured()) {
-                apiCall("processRequest", { reqId: targetReqId, action: targetAction, comment }).then(() => {
+                apiCall("processRequest", { reqId: targetReqId, reqAction: targetAction, actionType: targetAction, comment }).then(() => {
                     fetchLatestData().then(() => {
                         renderAdminRequests();
                         renderStaffRequests();
