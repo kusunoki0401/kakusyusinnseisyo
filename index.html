@@ -328,7 +328,7 @@
 
                     <!-- 申請履歴 -->
                     <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div class="flex justify-between items-center mb-4">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 border-b border-slate-100 pb-3">
                             <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <i class="fa-solid fa-clock-rotate-left text-teal-600"></i>
                                 <span>あなたの申請履歴・状態</span>
@@ -336,6 +336,26 @@
                             <button onclick="fetchLatestData()" class="text-xs text-slate-500 hover:text-teal-600 transition flex items-center gap-1">
                                 <i class="fa-solid fa-arrows-rotate"></i> 再読み込み
                             </button>
+                        </div>
+
+                        <!-- 絞り込みフィルター領域 -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                                    <i class="fa-regular fa-calendar-days text-teal-600"></i> 対象年月（和暦）
+                                </label>
+                                <select id="staffMonthFilter" onchange="renderStaffRequests()" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                                    <option value="ALL">すべての期間 (全申請)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                                    <i class="fa-solid fa-filter text-teal-600"></i> 申請種別
+                                </label>
+                                <select id="staffTypeFilter" onchange="renderStaffRequests()" class="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                                    <option value="ALL">すべての申請種別</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div id="staffRequestList" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
@@ -985,6 +1005,20 @@
         function escapeHtml(str) {
             if (!str) return '';
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function formatReiwaMonth(ymStr) {
+            if (!ymStr || typeof ymStr !== 'string') return '';
+            const match = ymStr.match(/^(\d{4})-(\d{1,2})$/);
+            if (!match) return ymStr;
+            const year = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10);
+            let eraStr = `${year}年`;
+            if (year >= 2019) {
+                const reiwaYear = year - 2018;
+                eraStr = reiwaYear === 1 ? '令和元年' : `令和${reiwaYear}年`;
+            }
+            return `${eraStr}${month}月分 (${year}年${month}月)`;
         }
 
         function formatJapaneseDate(dateStr) {
@@ -1748,12 +1782,74 @@
 
             const myReqs = requestList.filter(r => r.staffId === currentUser.id);
 
-            if (myReqs.length === 0) {
-                container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs">申請履歴はありません</div>`;
+            const monthSelect = document.getElementById('staffMonthFilter');
+            const typeSelect = document.getElementById('staffTypeFilter');
+
+            if (monthSelect && typeSelect) {
+                const currentMonthVal = monthSelect.value || 'ALL';
+                const currentTypeVal = typeSelect.value || 'ALL';
+
+                // 対象年月の抽出 (startDate 優先、無ければ createdAt から取得)
+                const monthSet = new Set();
+                myReqs.forEach(r => {
+                    const dateStr = r.startDate || (r.createdAt ? r.createdAt.substring(0, 10) : '');
+                    if (dateStr && dateStr.length >= 7) {
+                        monthSet.add(dateStr.substring(0, 7));
+                    }
+                });
+                const months = Array.from(monthSet).sort().reverse();
+
+                monthSelect.innerHTML = `<option value="ALL">すべての期間 (全申請)</option>` +
+                    months.map(m => `<option value="${m}">${formatReiwaMonth(m)}</option>`).join('');
+
+                if (months.includes(currentMonthVal) || currentMonthVal === 'ALL') {
+                    monthSelect.value = currentMonthVal;
+                } else {
+                    monthSelect.value = 'ALL';
+                }
+
+                // 申請種別の抽出 (規定種別 + myReqs内のユニーク種別)
+                const typeSet = new Set(['有給届', '残業申請書', '遅刻届', '早退届', '早出申請書', '外出申請書', '休日出勤届']);
+                myReqs.forEach(r => {
+                    if (r.type) typeSet.add(r.type);
+                });
+                const types = Array.from(typeSet);
+
+                typeSelect.innerHTML = `<option value="ALL">すべての申請種別</option>` +
+                    types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+
+                if (types.includes(currentTypeVal) || currentTypeVal === 'ALL') {
+                    typeSelect.value = currentTypeVal;
+                } else {
+                    typeSelect.value = 'ALL';
+                }
+            }
+
+            const selectedMonth = monthSelect ? monthSelect.value : 'ALL';
+            const selectedType = typeSelect ? typeSelect.value : 'ALL';
+
+            // フィルタリング処理
+            const filteredReqs = myReqs.filter(r => {
+                if (selectedMonth !== 'ALL') {
+                    const dateStr = r.startDate || (r.createdAt ? r.createdAt.substring(0, 10) : '');
+                    if (!dateStr || dateStr.substring(0, 7) !== selectedMonth) {
+                        return false;
+                    }
+                }
+                if (selectedType !== 'ALL') {
+                    if (r.type !== selectedType) {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            if (filteredReqs.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs">対象の申請履歴はありません</div>`;
                 return;
             }
 
-            container.innerHTML = myReqs.map(r => {
+            container.innerHTML = filteredReqs.map(r => {
                 let statusBadge = '<span class="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-[11px] font-bold">申請中</span>';
                 if (r.status === '承認') statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-[11px] font-bold">承認済み</span>';
                 if (r.status === '差し戻し') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full text-[11px] font-bold">差し戻し</span>';
