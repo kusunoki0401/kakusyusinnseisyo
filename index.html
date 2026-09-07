@@ -1289,13 +1289,25 @@
             }
         }
 
+        function normalizeStatus(status) {
+            if (!status) return '申請中';
+            const s = String(status).trim();
+            if (s.includes('承認') || s.toLowerCase() === 'approve') return '承認';
+            if (s.includes('差し戻し') || s.toLowerCase() === 'remand' || s.toLowerCase() === 'sendback') return '差し戻し';
+            if (s.includes('却下') || s.toLowerCase() === 'reject') return '却下';
+            return s;
+        }
+
         async function fetchLatestData() {
             if (isGasConfigured()) {
                 updateSyncBadge('syncing', '同期確認中...');
                 const res = await apiCall("getAllData", {}, 15000);
                 if (res && res.success) {
                     staffList = res.staffList || [];
-                    requestList = res.requestList || [];
+                    requestList = (res.requestList || []).map(r => ({
+                        ...r,
+                        status: normalizeStatus(r.status)
+                    }));
                     saveLocalData();
                     updateSyncBadge('online');
                     if (currentUser) {
@@ -1338,7 +1350,10 @@
                 const s = localStorage.getItem('kusunoki_staff_data');
                 const r = localStorage.getItem('kusunoki_requests_data');
                 staffList = s ? JSON.parse(s) : [];
-                requestList = r ? JSON.parse(r) : [];
+                requestList = (r ? JSON.parse(r) : []).map(req => ({
+                    ...req,
+                    status: normalizeStatus(req.status)
+                }));
             } catch (e) {
                 staffList = [];
                 requestList = [];
