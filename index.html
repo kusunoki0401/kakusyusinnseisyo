@@ -2300,48 +2300,79 @@
                 return;
             }
 
-            // 0.1秒で即時ローカル画面へ判定反映（String型キャストで安全に照合）
             const targetReqId = selectedRequestId;
             const targetAction = selectedAction;
-            const req = requestList.find(r => String(r.id) === String(targetReqId));
+            const statusMap = { 'approve': '承認', 'remand': '差し戻し', 'reject': '却下' };
+            const targetStatus = statusMap[targetAction] || targetAction;
 
-            if (req) {
-                if (targetAction === 'approve') {
-                    req.status = '承認';
-                    if (req.type.includes('有給休暇') || req.type.includes('有給届')) {
-                        const staff = staffList.find(s => String(s.id) === String(req.staffId));
-                        if (staff) staff.used += (parseFloat(req.days) || 0);
-                    }
-                    showToast('申請を承認しました');
-                } else if (targetAction === 'remand') {
-                    req.status = '差し戻し';
-                    req.remandComment = comment;
-                    showToast('差し戻し処理を完了しました');
-                } else if (targetAction === 'reject') {
-                    req.status = '却下';
-                    req.remandComment = comment;
-                    showToast('申請を却下しました', 'fa-circle-xmark text-rose-400');
-                }
-                saveLocalData();
-            } else {
+            const reqIndex = requestList.findIndex(r => String(r.id) === String(targetReqId));
+            if (reqIndex === -1) {
                 console.warn('Target request not found for ID:', targetReqId);
                 showToast('対象の申請データが見つかりませんでした', 'fa-circle-exclamation text-amber-400');
+                closeActionModal();
+                return;
             }
 
+            // 退避（ロールバック用）
+            const originalReqState = { ...requestList[reqIndex] };
+            const req = requestList[reqIndex];
+
+            // 1. ローカル画面での即時更新
+            if (targetAction === 'approve') {
+                req.status = '承認';
+                if (req.type.includes('有給休暇') || req.type.includes('有給届')) {
+                    const staff = staffList.find(s => String(s.id) === String(req.staffId));
+                    if (staff) staff.used += (parseFloat(req.days) || 0);
+                }
+            } else if (targetAction === 'remand') {
+                req.status = '差し戻し';
+                req.remandComment = comment;
+            } else if (targetAction === 'reject') {
+                req.status = '却下';
+                req.remandComment = comment;
+            }
+
+            saveLocalData();
             closeActionModal();
             renderAdminRequests();
             renderStaffRequests();
             if (typeof activeAdminSubTab !== 'undefined' && activeAdminSubTab === 'search') renderAdminSearchResults();
 
-            // バックグラウンドでGASサーバーと同期
+            // 2. GASサーバーとの同期（厳格な成功チェック）
             if (isGasConfigured()) {
-                apiCall("processRequest", { reqId: targetReqId, reqAction: targetAction, actionType: targetAction, comment }).then(() => {
-                    fetchLatestData().then(() => {
-                        renderAdminRequests();
-                        renderStaffRequests();
-                        if (typeof activeAdminSubTab !== 'undefined' && activeAdminSubTab === 'search') renderAdminSearchResults();
-                    });
-                });
+                const payload = {
+                    reqId: String(targetReqId),
+                    id: String(targetReqId),
+                    status: targetStatus,
+                    reqStatus: targetStatus,
+                    reqAction: targetAction,
+                    actionType: targetAction,
+                    comment: comment
+                };
+
+                const res = await apiCall("processRequest", payload);
+
+                if (res && res.success) {
+                    const msg = res.message || `申請を【${targetStatus}】処理し、スプレッドシートへ保存しました`;
+                    showToast(msg);
+                    await fetchLatestData();
+                    renderAdminRequests();
+                    renderStaffRequests();
+                    if (typeof activeAdminSubTab !== 'undefined' && activeAdminSubTab === 'search') renderAdminSearchResults();
+                } else {
+                    // GAS側の処理が失敗した場合は元の状態へロールバック
+                    requestList[reqIndex] = originalReqState;
+                    saveLocalData();
+                    renderAdminRequests();
+                    renderStaffRequests();
+                    if (typeof activeAdminSubTab !== 'undefined' && activeAdminSubTab === 'search') renderAdminSearchResults();
+
+                    const errorDetails = res ? (res.message || res.error || 'レスポンスエラー') : '通信タイムアウトまたは応答なし';
+                    console.error('GAS Process Request Failed:', res);
+                    showToast(`更新失敗: ${errorDetails} (スプレッドシート側の処理をご確認ください)`, 'fa-circle-exclamation text-rose-400');
+                }
+            } else {
+                showToast(`申請を【${targetStatus}】処理しました (ローカル保存中)`);
             }
         }
 
