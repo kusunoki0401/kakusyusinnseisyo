@@ -2285,36 +2285,46 @@
                 return;
             }
 
-            // 0.1秒で即時ローカル画面へ判定反映
-            const req = requestList.find(r => r.id === selectedRequestId);
+            // 0.1秒で即時ローカル画面へ判定反映（String型キャストで安全に照合）
+            const targetReqId = selectedRequestId;
+            const targetAction = selectedAction;
+            const req = requestList.find(r => String(r.id) === String(targetReqId));
+
             if (req) {
-                if (selectedAction === 'approve') {
+                if (targetAction === 'approve') {
                     req.status = '承認';
                     if (req.type.includes('有給休暇') || req.type.includes('有給届')) {
-                        const staff = staffList.find(s => s.id === req.staffId);
-                        if (staff) staff.used += req.days;
+                        const staff = staffList.find(s => String(s.id) === String(req.staffId));
+                        if (staff) staff.used += (parseFloat(req.days) || 0);
                     }
                     showToast('申請を承認しました');
-                } else if (selectedAction === 'remand') {
+                } else if (targetAction === 'remand') {
                     req.status = '差し戻し';
                     req.remandComment = comment;
                     showToast('差し戻し処理を完了しました');
-                } else if (selectedAction === 'reject') {
+                } else if (targetAction === 'reject') {
                     req.status = '却下';
                     req.remandComment = comment;
                     showToast('申請を却下しました', 'fa-circle-xmark text-rose-400');
                 }
                 saveLocalData();
+            } else {
+                console.warn('Target request not found for ID:', targetReqId);
+                showToast('対象の申請データが見つかりませんでした', 'fa-circle-exclamation text-amber-400');
             }
 
             closeActionModal();
             renderAdminRequests();
+            renderStaffRequests();
+            if (typeof activeAdminSubTab !== 'undefined' && activeAdminSubTab === 'search') renderAdminSearchResults();
 
             // バックグラウンドでGASサーバーと同期
             if (isGasConfigured()) {
-                apiCall("processRequest", { reqId: selectedRequestId, action: selectedAction, comment }).then(() => {
+                apiCall("processRequest", { reqId: targetReqId, action: targetAction, comment }).then(() => {
                     fetchLatestData().then(() => {
                         renderAdminRequests();
+                        renderStaffRequests();
+                        if (typeof activeAdminSubTab !== 'undefined' && activeAdminSubTab === 'search') renderAdminSearchResults();
                     });
                 });
             }
