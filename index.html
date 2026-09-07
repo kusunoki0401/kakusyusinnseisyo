@@ -2002,8 +2002,8 @@
             if (!tbody) return;
 
             let filtered = staffList.filter(s => {
-                const nameMatch = s.name.toLowerCase().includes(search) || (s.role && s.role.toLowerCase().includes(search));
-                const sStatus = s.status || '在職';
+                const nameMatch = (s.name || '').toLowerCase().includes(search) || (s.role && s.role.toLowerCase().includes(search));
+                const sStatus = (s.status === '退職') ? '退職' : '在職';
                 if (statusFilter === 'ALL') return nameMatch;
                 return nameMatch && sStatus === statusFilter;
             });
