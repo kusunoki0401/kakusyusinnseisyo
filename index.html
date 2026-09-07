@@ -1479,7 +1479,15 @@
             document.getElementById('userHeaderProfile').classList.add('hidden');
             document.getElementById('unauthHeaderAdminBtn').classList.remove('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
-            document.getElementById('loginPin').value = '';
+            
+            const loginIdEl = document.getElementById('loginIdInput');
+            if (loginIdEl) loginIdEl.value = '';
+            const loginPinEl = document.getElementById('loginPin');
+            if (loginPinEl) loginPinEl.value = '';
+            
+            const loginError = document.getElementById('loginError');
+            if (loginError) loginError.classList.add('hidden');
+
             showToast('ログアウトしました', 'fa-right-from-bracket text-slate-400');
         }
 
@@ -1489,6 +1497,11 @@
             document.getElementById('mainApp').classList.remove('hidden');
             document.getElementById('userHeaderProfile').classList.remove('hidden');
             document.getElementById('userHeaderProfile').classList.add('flex');
+
+            const loginIdEl = document.getElementById('loginIdInput');
+            if (loginIdEl) loginIdEl.value = '';
+            const loginPinEl = document.getElementById('loginPin');
+            if (loginPinEl) loginPinEl.value = '';
 
             document.getElementById('headerUserName').textContent = currentUser.name;
             document.getElementById('headerUserRole').textContent = currentUser.role || (currentUser.isAdmin ? '管理者' : 'スタッフ');
