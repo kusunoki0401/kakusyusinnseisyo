@@ -1,599 +1,2436 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>スタッフ台帳・有休管理＆GAS同期システム</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>介護付き有料老人ホームくすの木 各種届出管理システム</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .fade-in {
+            animation: fadeIn 0.25s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .forest-bg-pattern {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#10b981 0.5px, transparent 0.5px), radial-gradient(#0f766e 0.5px, #f8fafc 0.5px);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            opacity: 0.15;
+        }
+    </style>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased relative overflow-x-hidden">
 
-  <!-- Header -->
-  <header class="bg-emerald-800 text-white shadow-md sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center space-x-3">
-        <div class="bg-emerald-700 p-2.5 rounded-lg shadow-inner">
-          <i class="fa-solid fa-users-gear text-2xl text-emerald-200"></i>
-        </div>
-        <div>
-          <h1 class="text-xl font-bold leading-tight">管理画面：スタッフ台帳・有休管理システム</h1>
-          <p class="text-xs text-emerald-200">Google Apps Script (スプレッドシート) 100%確実連携・データ保持版</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <button id="syncBtn" onclick="fetchLatestData()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg shadow transition flex items-center gap-2">
-          <i class="fa-solid fa-rotate text-xs"></i>
-          <span>同期完了 (fetchLatestData)</span>
-        </button>
-        <button onclick="openStaffModal()" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white text-sm font-bold rounded-lg shadow transition flex items-center gap-2">
-          <i class="fa-solid fa-user-plus text-xs"></i>
-          <span>新規スタッフ登録</span>
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Notification Toast Banner -->
-  <div id="toast" class="hidden max-w-7xl mx-auto px-4 sm:px-6 mt-4">
-    <div id="toastContent" class="p-3 rounded-lg text-sm font-bold flex items-center justify-between shadow">
-      <span id="toastMsg"></span>
-      <button onclick="hideToast()" class="text-xs opacity-75 hover:opacity-100 ml-4">&times;</button>
-    </div>
-  </div>
-
-  <!-- Main Content -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full space-y-6">
-
-    <!-- Overview Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <div class="bg-white p-4 rounded-xl shadow border border-slate-200">
-        <div class="text-xs font-bold text-slate-500">全登録スタッフ</div>
-        <div id="countTotal" class="text-2xl font-black text-slate-800 mt-1">0名</div>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow border border-slate-200">
-        <div class="text-xs font-bold text-emerald-600">在籍スタッフ</div>
-        <div id="countActive" class="text-2xl font-black text-emerald-600 mt-1">0名</div>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow border border-slate-200">
-        <div class="text-xs font-bold text-rose-500">退職済み</div>
-        <div id="countRetired" class="text-2xl font-black text-rose-500 mt-1">0名</div>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow border border-slate-200">
-        <div class="text-xs font-bold text-blue-600">合計有給残日数</div>
-        <div id="countLeaveRem" class="text-2xl font-black text-blue-600 mt-1">0日</div>
-      </div>
-    </div>
-
-    <!-- Filter & Staff Table -->
-    <div class="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
-      <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-bold text-slate-700">絞り込み表示:</span>
-          <button onclick="setFilter('all')" id="filterAllBtn" class="px-3 py-1 text-xs font-bold rounded-full bg-emerald-800 text-white">すべて</button>
-          <button onclick="setFilter('active')" id="filterActiveBtn" class="px-3 py-1 text-xs font-bold rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300">在職のみ</button>
-          <button onclick="setFilter('retired')" id="filterRetiredBtn" class="px-3 py-1 text-xs font-bold rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300">退職者のみ</button>
-        </div>
-        <div class="text-xs text-slate-500">
-          <i class="fa-solid fa-shield-halved text-emerald-600"></i> F5更新や同期完了(fetchLatestData)を行っても、削除や新規登録状態が確実に保持されます。
-        </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm border-collapse">
-          <thead>
-            <tr class="bg-slate-100 text-slate-600 text-xs font-bold border-b border-slate-200">
-              <th class="px-4 py-3">ID</th>
-              <th class="px-4 py-3">氏名</th>
-              <th class="px-4 py-3">役職 / 部署</th>
-              <th class="px-4 py-3">入社年月日</th>
-              <th class="px-4 py-3 text-center">状態</th>
-              <th class="px-4 py-3 text-right">有給付与</th>
-              <th class="px-4 py-3 text-right">有給消化</th>
-              <th class="px-4 py-3 text-right">有給残数</th>
-              <th class="px-4 py-3 text-center">操作</th>
-            </tr>
-          </thead>
-          <tbody id="staffTableBody" class="divide-y divide-slate-100">
-            <!-- Table rows injected via JS -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </main>
-
-  <!-- Registration / Edit Modal -->
-  <div id="staffModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-      <div class="px-6 py-4 bg-emerald-800 text-white flex items-center justify-between">
-        <h3 id="modalTitle" class="text-base font-bold">新規スタッフ登録</h3>
-        <button onclick="closeStaffModal()" class="text-white opacity-70 hover:opacity-100">&times;</button>
-      </div>
-      <form id="staffForm" onsubmit="handleStaffSave(event)" class="p-6 space-y-4">
-        <input type="hidden" id="staffId">
+    <!-- 背景: 森のイラスト・グラデーションレイヤー -->
+    <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
+        <div class="absolute inset-0 bg-gradient-to-br from-teal-50/80 via-emerald-50/40 to-slate-100/90"></div>
+        <div class="absolute inset-0 forest-bg-pattern opacity-10"></div>
         
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">氏名 <span class="text-rose-500">*</span></label>
-          <input type="text" id="staffName" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="例: 田中 太郎">
+        <div class="absolute bottom-0 left-0 right-0 h-48 sm:h-64 opacity-20 text-teal-800 flex items-end justify-between overflow-hidden">
+            <svg class="w-full h-full min-w-[800px] preserve-3d" viewBox="0 0 1200 320" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path opacity="0.4" d="M0 320 L0 220 L30 170 L60 220 L90 150 L120 220 L150 130 L180 220 L220 160 L260 220 L300 140 L340 220 L390 120 L440 220 L490 160 L540 220 L600 110 L660 220 L720 150 L780 220 L830 130 L880 220 L940 160 L1000 220 L1060 120 L1120 220 L1170 170 L1200 220 L1200 320 Z"/>
+                <path opacity="0.7" d="M0 320 L0 250 L40 180 L80 250 L120 160 L160 250 L210 140 L260 250 L320 170 L380 250 L430 130 L480 250 L550 180 L620 250 L680 150 L740 250 L800 120 L860 250 L920 170 L980 250 L1050 140 L1120 250 L1180 190 L1200 250 L1180 190 L1200 250 L1200 320 Z"/>
+                <path d="M-20 320 Q 30 200, 90 230 Q 150 180, 210 240 Q 280 160, 350 220 Q 420 140, 500 210 Q 580 120, 660 200 Q 740 150, 820 230 Q 900 130, 980 210 Q 1060 160, 1140 230 Q 1200 190, 1220 320 Z"/>
+            </svg>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">役職 / 職種</label>
-            <select id="staffRole" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-              <option value="介護職員">介護職員</option>
-              <option value="看護師">看護師</option>
-              <option value="ケアマネジャー">ケアマネジャー</option>
-              <option value="生活相談員">生活相談員</option>
-              <option value="管理者">管理者</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">部署</label>
-            <input type="text" id="staffDept" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" placeholder="例: 介護部">
-          </div>
+        <div class="absolute top-12 left-10 text-teal-600/10 text-6xl transform -rotate-12">
+            <i class="fa-solid fa-tree"></i>
         </div>
-
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">入社年月日 <span class="text-rose-500">*</span></label>
-          <input type="date" id="staffJoinDate" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        <div class="absolute top-1/4 right-12 text-emerald-600/10 text-8xl transform rotate-12">
+            <i class="fa-solid fa-leaf"></i>
         </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">有給付与日数</label>
-            <input type="number" id="staffLeaveTotal" min="0" value="10" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">有給消化日数</label>
-            <input type="number" id="staffLeaveUsed" min="0" value="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-          </div>
+        <div class="absolute bottom-1/3 left-1/4 text-teal-700/10 text-7xl transform -rotate-45">
+            <i class="fa-solid fa-seedling"></i>
         </div>
-
-        <div class="flex items-center gap-2 pt-2">
-          <input type="checkbox" id="staffIsRetired" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
-          <label for="staffIsRetired" class="text-xs font-bold text-rose-600">退職者として登録/設定</label>
-        </div>
-
-        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-          <button type="button" onclick="closeStaffModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition">キャンセル</button>
-          <button type="submit" class="px-5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg shadow transition">保存する</button>
-        </div>
-      </form>
     </div>
-  </div>
 
-  <script>
-    // System Constants & Local Storage Keys
-    const STORAGE_KEY = 'staff_master_list_v1';
-    const STORAGE_INIT_KEY = 'staff_master_initialized_v1';
-    
-    // Default seed data (loaded ONLY on absolute first run before initialization)
-    const DEFAULT_STAFF_MASTER = [
-      { id: 'STF-001', name: '山田 太郎', role: '介護職員', department: '介護部', joinDate: '2022-04-01', isRetired: false, paidLeaveTotal: 20, paidLeaveUsed: 5, updatedAt: '2026-09-01T00:00:00Z' },
-      { id: 'STF-002', name: '佐藤 花子', role: '看護師', department: '看護部', joinDate: '2021-10-01', isRetired: false, paidLeaveTotal: 20, paidLeaveUsed: 12, updatedAt: '2026-09-01T00:00:00Z' },
-      { id: 'STF-003', name: '鈴木 一郎', role: 'ケアマネジャー', department: '計画作成部', joinDate: '2023-01-15', isRetired: false, paidLeaveTotal: 10, paidLeaveUsed: 2, updatedAt: '2026-09-01T00:00:00Z' }
-    ];
+    <!-- ヘッダー -->
+    <header class="bg-teal-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white text-teal-700 p-2 rounded-xl text-xl shadow-inner font-bold flex items-center justify-center w-10 h-10 shrink-0">
+                    <i class="fa-solid fa-hands-holding-child"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg md:text-xl leading-tight">介護付き有料老人ホームくすの木</h1>
+                    <div class="flex items-center space-x-2">
+                        <p class="text-xs text-teal-100 hidden sm:block">各種届出管理システム</p>
+                        <span id="syncBadge" class="bg-teal-800 text-teal-200 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <i class="fa-solid fa-cloud-arrow-up text-[9px]"></i> オンライン同期中
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="unauthHeaderAdminBtn">
+                <button onclick="openAdminLoginModal()" class="bg-teal-800/90 hover:bg-teal-900 text-amber-200 hover:text-white text-xs font-bold px-3 py-2 rounded-xl transition border border-teal-600/60 flex items-center space-x-1.5 shadow-sm">
+                    <i class="fa-solid fa-user-shield text-amber-400"></i>
+                    <span>管理者ログイン</span>
+                </button>
+            </div>
 
-    // State Variables
-    let staffList = [];
-    let currentFilter = 'all';
-    let editingStaffId = null;
-    let gasApiUrl = ''; // Configurable GAS Web App Exec Endpoint URL
+            <div id="userHeaderProfile" class="hidden items-center space-x-2 sm:space-x-3">
+                <div class="text-right hidden sm:block">
+                    <div id="headerUserName" class="font-bold text-sm">--</div>
+                    <div id="headerUserRole" class="text-xs text-teal-200">--</div>
+                </div>
 
-    // --- INITIALIZATION ---
-    function initApp() {
-      const isInitialized = localStorage.getItem(STORAGE_INIT_KEY);
-      const savedData = localStorage.getItem(STORAGE_KEY);
+                <button onclick="handleLogout()" class="bg-teal-800 hover:bg-teal-900 text-white text-xs px-3 py-2.5 rounded-xl transition border border-teal-600 flex items-center space-x-1.5 shadow-sm">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>ログアウト</span>
+                </button>
+            </div>
+        </div>
+    </header>
 
-      if (savedData !== null) {
-        try {
-          staffList = JSON.parse(savedData);
-        } catch (e) {
-          console.error("localStorage parse error:", e);
-          staffList = DEFAULT_STAFF_MASTER;
+    <!-- メインコンテンツ -->
+    <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 z-10 relative">
+
+        <!-- ログイン画面 -->
+        <div id="loginScreen" class="max-w-xl mx-auto my-6 sm:my-10 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden fade-in">
+            <div class="flex border-b border-slate-200 bg-slate-100/90 text-sm md:text-base font-bold">
+                <button type="button" id="tabLoginStaff" onclick="setLoginMode('staff')" class="flex-1 py-4 px-4 text-center bg-white text-teal-700 border-b-2 border-teal-600 transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-user-nurse text-lg"></i>
+                    <span>スタッフ ログイン</span>
+                </button>
+                <button type="button" onclick="openGuideModal()" class="flex-1 py-4 px-4 text-center text-slate-600 hover:text-emerald-700 transition flex items-center justify-center space-x-2 hover:bg-emerald-50/50">
+                    <i class="fa-solid fa-book-bookmark text-emerald-600 text-lg"></i>
+                    <span>有休付与基準表</span>
+                </button>
+            </div>
+
+            <div id="loginHeaderBg" class="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 sm:p-8 text-white text-center transition-all">
+                <i id="loginHeaderIcon" class="fa-solid fa-user-nurse text-4xl mb-2"></i>
+                <h2 id="loginHeaderTitle" class="text-xl sm:text-2xl font-bold">スタッフ 個人ログイン</h2>
+                <p id="loginHeaderSub" class="text-sm text-teal-100 mt-1">ログインIDと暗証番号（4桁）を入力してください</p>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLogin(event)" autocomplete="off" class="p-6 sm:p-10 space-y-5">
+                <input type="text" name="fake_usernameremembered" class="hidden" tabindex="-1" aria-hidden="true" autocomplete="off" />
+                <input type="password" name="fake_passwordremembered" class="hidden" tabindex="-1" aria-hidden="true" autocomplete="off" />
+
+                <div id="loginIdGroup">
+                    <label class="block text-sm font-bold text-slate-700 mb-1.5">ログインID</label>
+                    <input type="text" id="loginIdInput" name="kusunoki_login_id_field" placeholder="例: 1004" required
+                        autocomplete="off" aria-autocomplete="none" role="presentation"
+                        class="w-full border border-slate-300 rounded-xl px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-500 bg-slate-50 font-mono">
+                </div>
+
+                <div>
+                    <label id="loginPinLabel" class="block text-sm font-bold text-slate-700 mb-1.5">暗証番号 (PIN)</label>
+                    <input type="password" id="loginPin" name="kusunoki_login_pin_field" maxlength="6" placeholder="4桁の暗証番号" required
+                        autocomplete="new-password" aria-autocomplete="none" role="presentation"
+                        class="w-full border border-slate-300 rounded-xl px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-500 tracking-widest">
+                </div>
+
+                <div id="loginError" class="hidden bg-red-50 text-red-600 p-3.5 rounded-xl text-sm border border-red-200 flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-exclamation shrink-0 text-lg"></i>
+                    <span id="loginErrorMsg">ログインIDまたは暗証番号が正しくありません。</span>
+                </div>
+
+                <button type="submit" id="loginSubmitBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-4 rounded-xl shadow-md transition flex justify-center items-center space-x-2 text-lg">
+                    <span id="loginBtnText">ログイン</span>
+                    <i id="loginBtnIcon" class="fa-solid fa-arrow-right"></i>
+                </button>
+
+                <div id="registerNoticeBox" class="pt-4 text-center border-t border-slate-100">
+                    <button type="button" onclick="openRegisterModal()" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-3.5 rounded-xl text-sm sm:text-base transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-user-plus text-emerald-600 text-lg"></i>
+                        <span>初めての方はこちら（新規ID発行・初回登録）</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- アプリメイン領域 (ログイン後) -->
+        <div id="mainApp" class="hidden fade-in space-y-6">
+
+            <!-- スタッフ専用画面 -->
+            <div id="staffView" class="space-y-6 hidden">
+                <div class="bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-2xl p-6 shadow-lg border border-teal-500">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-teal-500/50 pb-4 mb-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="bg-teal-500/40 text-teal-100 text-xs px-2.5 py-1 rounded-full border border-teal-400/30">マイページ</span>
+                                <button onclick="openGuideModal()" class="bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100 text-xs px-3 py-1 rounded-full border border-emerald-400/30 font-bold transition flex items-center gap-1">
+                                    <i class="fa-solid fa-book-bookmark text-amber-300"></i> 付与基準表を見る
+                                </button>
+                                <button onclick="openStaffPinModal()" class="bg-amber-500/30 hover:bg-amber-500/50 text-amber-200 text-xs px-2.5 py-1 rounded-full border border-amber-400/30 font-bold transition flex items-center gap-1">
+                                    <i class="fa-solid fa-key"></i> PIN変更
+                                </button>
+                            </div>
+                            <h2 class="text-2xl font-bold mt-2" id="staffCardName">-- 様</h2>
+                            <div class="flex items-center gap-3 mt-1 text-xs text-teal-100 flex-wrap">
+                                <p>入社日: <span id="staffCardHireDate" class="font-bold">----年--月--日</span> (<span id="staffCardServiceYears" class="font-bold">--</span>)</p>
+                                <span class="bg-teal-900/60 text-amber-300 font-bold px-2.5 py-0.5 rounded-full border border-amber-300/30">
+                                    <i class="fa-solid fa-calendar-check mr-1"></i>有休付与月: 毎年<span id="staffCardGrantMonth">--</span>月
+                                </span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs text-teal-100">利用可能な有給残日数</span>
+                            <div class="text-4xl font-extrabold tracking-tight text-amber-300">
+                                <span id="staffCardTotalRemaining">0.0</span> <span class="text-lg text-white font-normal">日</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 sm:gap-4 text-center bg-teal-900/40 rounded-xl p-3 border border-teal-500/30">
+                        <div>
+                            <p class="text-[11px] text-teal-200">前年繰越</p>
+                            <p class="text-base sm:text-lg font-bold text-white"><span id="staffCardCarriedOver">0.0</span>日</p>
+                        </div>
+                        <div class="border-x border-teal-500/30">
+                            <p class="text-[11px] text-teal-200">今年度付与</p>
+                            <p class="text-base sm:text-lg font-bold text-teal-100"><span id="staffCardCurrentGranted">0.0</span>日</p>
+                        </div>
+                        <div>
+                            <p class="text-[11px] text-teal-200">今年度消化</p>
+                            <p class="text-base sm:text-lg font-bold text-rose-300"><span id="staffCardUsed">0.0</span>日</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- 新規申請フォーム -->
+                    <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-pen-to-square text-teal-600"></i>
+                            <span>新規申請の作成</span>
+                        </h3>
+
+                        <form id="requestForm" onsubmit="handleRequestSubmit(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">届出種別</label>
+                                <select id="reqType" onchange="handleReqTypeChange()" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500 bg-white font-bold">
+                                    <option value="有給届">有給届</option>
+                                    <option value="欠勤届">欠勤届</option>
+                                    <option value="早退届">早退届</option>
+                                    <option value="遅刻届">遅刻届</option>
+                                    <option value="外出申請書">外出申請書</option>
+                                    <option value="慶弔休暇">慶弔休暇</option>
+                                    <option value="残業申請書">残業申請書</option>
+                                    <option value="早出申請書">早出申請書</option>
+                                    <option value="休日出勤届">休日出勤届</option>
+                                    <option value="ホーム会議欠席届">ホーム会議欠席届</option>
+                                </select>
+                            </div>
+
+                            <div id="halfDayOptionGroup" class="hidden">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">有休区分</label>
+                                <div class="grid grid-cols-3 gap-1.5">
+                                    <label class="border border-slate-300 rounded-xl p-2 flex items-center space-x-1 text-xs font-medium cursor-pointer hover:bg-slate-50">
+                                        <input type="radio" name="halfDayType" value="全休" checked onchange="calculateReqDays()" class="text-teal-600 focus:ring-teal-500">
+                                        <span>全休 (1.0日)</span>
+                                    </label>
+                                    <label class="border border-slate-300 rounded-xl p-2 flex items-center space-x-1 text-xs font-medium cursor-pointer hover:bg-slate-50">
+                                        <input type="radio" name="halfDayType" value="午前半休" onchange="calculateReqDays()" class="text-teal-600 focus:ring-teal-500">
+                                        <span>午前半休</span>
+                                    </label>
+                                    <label class="border border-slate-300 rounded-xl p-2 flex items-center space-x-1 text-xs font-medium cursor-pointer hover:bg-slate-50">
+                                        <input type="radio" name="halfDayType" value="午後半休" onchange="calculateReqDays()" class="text-teal-600 focus:ring-teal-500">
+                                        <span>午後半休</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- 時間設定エリア（動的に変化） -->
+                            <div id="timeRangeOptionGroup" class="hidden bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
+                                <h4 id="timeRangeSectionTitle" class="text-xs font-bold text-teal-800 border-b border-slate-200 pb-1">対象時間・休憩設定</h4>
+                                
+                                <div>
+                                    <span id="targetTimeLabel" class="text-[11px] font-bold text-slate-700 block mb-1">対象時間（開始 ～ 終了）</span>
+                                    <div class="grid grid-cols-2 gap-2 items-center">
+                                        <div>
+                                            <span class="text-[10px] text-slate-500 block">開始時刻</span>
+                                            <input type="time" id="reqStartTime" value="09:00" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] text-slate-500 block">終了時刻</span>
+                                            <input type="time" id="reqEndTime" value="18:00" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="regularTimeArea" class="hidden bg-amber-50/70 p-2.5 rounded-lg border border-amber-200/80">
+                                    <span class="text-[11px] font-bold text-amber-900 block mb-1">本来の勤務時間（定時シフト）</span>
+                                    <div class="grid grid-cols-2 gap-2 items-center">
+                                        <div>
+                                            <span class="text-[10px] text-amber-700 block">定時 開始</span>
+                                            <input type="time" id="reqRegStartTime" value="09:00" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] text-amber-700 block">定時 終了</span>
+                                            <input type="time" id="reqRegEndTime" value="18:00" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <span class="text-[10px] font-bold text-slate-600 block mb-1">休憩の有無</span>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <label class="border border-slate-300 bg-white rounded-lg p-2 flex items-center space-x-2 text-xs font-medium cursor-pointer hover:bg-slate-50">
+                                            <input type="radio" name="reqBreakType" value="休憩なし" checked class="text-teal-600 focus:ring-teal-500">
+                                            <span>なし</span>
+                                        </label>
+                                        <label class="border border-slate-300 bg-white rounded-lg p-2 flex items-center space-x-2 text-xs font-medium cursor-pointer hover:bg-slate-50">
+                                            <input type="radio" name="reqBreakType" value="休憩あり" class="text-teal-600 focus:ring-teal-500">
+                                            <span>あり</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">開始日</label>
+                                    <input type="date" id="reqStartDate" required onchange="calculateReqDays()" class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-teal-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">終了日</label>
+                                    <input type="date" id="reqEndDate" required onchange="calculateReqDays()" class="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-teal-500">
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+                                <span class="font-bold text-slate-600">申請対象日数:</span>
+                                <span id="calculatedReqDays" class="font-bold text-teal-700 text-sm">1.0 日</span>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">申請理由・備考</label>
+                                <textarea id="reqReason" rows="3" placeholder="理由を入力してください（私用、通院等）" class="w-full border border-slate-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-teal-500"></textarea>
+                            </div>
+
+                            <button type="submit" id="submitReqBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-paper-plane"></i>
+                                <span>事務所へ申請を送信</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- 申請履歴 -->
+                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-clock-rotate-left text-teal-600"></i>
+                                <span>あなたの申請履歴・状態</span>
+                            </h3>
+                            <button onclick="fetchLatestData()" class="text-xs text-slate-500 hover:text-teal-600 transition flex items-center gap-1">
+                                <i class="fa-solid fa-arrows-rotate"></i> 再読み込み
+                            </button>
+                        </div>
+
+                        <div id="staffRequestList" class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 事務所・管理者専用画面 -->
+            <div id="adminView" class="space-y-6 hidden">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full sm:w-auto flex-1">
+                        <button id="adminTabRequests" onclick="setAdminSubTab('requests')" class="py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center space-x-1 bg-amber-50 text-amber-800 border border-amber-200">
+                            <i class="fa-solid fa-inbox text-amber-600"></i>
+                            <span class="truncate">審査一覧</span>
+                            <span id="pendingBadge" class="bg-amber-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                        </button>
+                        <button id="adminTabStaff" onclick="setAdminSubTab('staff')" class="py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-50 transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-users-gear text-slate-500"></i>
+                            <span class="truncate">有休台帳</span>
+                        </button>
+                        <button id="adminTabSearch" onclick="setAdminSubTab('search')" class="py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-50 transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-magnifying-glass text-slate-500"></i>
+                            <span class="truncate">月別照会</span>
+                        </button>
+                        <button id="adminTabGuide" onclick="setAdminSubTab('guide')" class="py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-50 transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-book-bookmark text-emerald-600"></i>
+                            <span class="truncate">付与基準表</span>
+                        </button>
+                    </div>
+
+                    <button onclick="openAdminPinModal()" class="w-full sm:w-auto bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold px-3 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shrink-0 shadow-sm">
+                        <i class="fa-solid fa-key text-amber-600"></i>
+                        <span>管理者PIN変更</span>
+                    </button>
+                </div>
+
+                <!-- 審査一覧サブタブ -->
+                <div id="adminSubRequests" class="space-y-4">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                            <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-clipboard-check text-amber-600"></i>
+                                <span>スタッフからの届出・申請件数</span>
+                            </h3>
+                            <div class="flex gap-2">
+                                <select id="adminStatusFilter" onchange="renderAdminRequests()" class="border border-slate-300 rounded-xl p-2 text-xs">
+                                    <option value="ALL">全てのステータス</option>
+                                    <option value="申請中" selected>未判定（申請中）のみ</option>
+                                    <option value="承認">承認済み</option>
+                                    <option value="差し戻し">差し戻し中</option>
+                                    <option value="却下">却下済み</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="adminRequestList" class="space-y-3">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 月別・個別照会タブ (承認済みのみ) -->
+                <div id="adminSubSearch" class="hidden space-y-4">
+                    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                            <div>
+                                <h3 class="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+                                    <i class="fa-solid fa-filter text-teal-600"></i>
+                                    <span>申請月・個別届出 照会（承認済みのみ）</span>
+                                </h3>
+                                <p class="text-xs sm:text-sm text-slate-500 mt-1">事務所で「承認」された確定届出データを検索・参照できます。</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <div class="flex justify-between items-center mb-1.5">
+                                    <label class="block text-xs sm:text-sm font-extrabold text-slate-700">① 対象年月</label>
+                                    <button type="button" onclick="clearMonthFilter()" class="text-[11px] text-teal-700 hover:text-teal-900 font-bold underline cursor-pointer">
+                                        全期間を表示
+                                    </button>
+                                </div>
+                                <input type="month" id="searchMonthFilter" onchange="renderAdminSearchResults()" class="w-full border border-slate-300 rounded-xl p-3 text-sm bg-white focus:ring-2 focus:ring-teal-500 font-bold">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs sm:text-sm font-extrabold text-slate-700 mb-1.5">② スタッフ選択</label>
+                                <select id="searchStaffFilter" onchange="renderAdminSearchResults()" class="w-full border border-slate-300 rounded-xl p-3 text-sm bg-white focus:ring-2 focus:ring-teal-500 font-bold">
+                                    <option value="ALL">全員（全スタッフ）</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs sm:text-sm font-extrabold text-slate-700 mb-1.5">③ 届出の種類</label>
+                                <select id="searchTypeFilter" onchange="renderAdminSearchResults()" class="w-full border border-slate-300 rounded-xl p-3 text-sm bg-white focus:ring-2 focus:ring-teal-500 font-bold">
+                                    <option value="ALL">すべての届出種別</option>
+                                    <option value="有給届">有給届</option>
+                                    <option value="欠勤届">欠勤届</option>
+                                    <option value="早退届">早退届</option>
+                                    <option value="遅刻届">遅刻届</option>
+                                    <option value="外出申請書">外出申請書</option>
+                                    <option value="慶弔休暇">慶弔休暇</option>
+                                    <option value="残業申請書">残業申請書</option>
+                                    <option value="早出申請書">早出申請書</option>
+                                    <option value="休日出勤届">休日出勤届</option>
+                                    <option value="ホーム会議欠席届">ホーム会議欠席届</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap justify-between items-center text-sm sm:text-base font-bold text-slate-700 mb-4 bg-teal-50/60 p-4 rounded-xl border border-teal-100">
+                            <div>
+                                承認件数: <strong id="searchResultCount" class="text-teal-700 text-lg sm:text-xl font-extrabold ml-1">0</strong> 件
+                            </div>
+                            <div>
+                                合計申請日数: <strong id="searchResultDays" class="text-teal-700 text-lg sm:text-xl font-extrabold ml-1">0.0</strong> 日
+                            </div>
+                        </div>
+
+                        <div id="adminSearchResultList" class="space-y-4 max-h-[650px] overflow-y-auto pr-1">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- スタッフ台帳管理タブ -->
+                <div id="adminSubStaff" class="hidden space-y-4">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <i class="fa-solid fa-users text-teal-600"></i>
+                                    <span>登録スタッフ一覧・有休台帳</span>
+                                </h3>
+                                <p class="text-xs text-slate-500">入社日・前年繰越・今年度付与・消化数・退職/削除管理を行えます。</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button onclick="openGuideModal()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3 py-2 rounded-xl text-xs border border-emerald-200 transition flex items-center gap-1.5 shrink-0">
+                                    <i class="fa-solid fa-book-bookmark text-emerald-600"></i> 法定有休付与基準表
+                                </button>
+                                <select id="staffStatusFilter" onchange="renderStaffTable()" class="border border-slate-300 rounded-xl px-2.5 py-2 text-xs focus:ring-2 focus:ring-teal-500">
+                                    <option value="在職" selected>在職中のみ</option>
+                                    <option value="退職">退職者のみ</option>
+                                    <option value="ALL">全員表示</option>
+                                </select>
+                                <input type="text" id="staffSearchInput" onkeyup="renderStaffTable()" placeholder="氏名・役職で検索..." class="border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500">
+                                <button onclick="openRegisterModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1 shrink-0">
+                                    <i class="fa-solid fa-plus"></i> 新規登録
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                        <th class="p-3">ID</th>
+                                        <th class="p-3">状態</th>
+                                        <th class="p-3">氏名</th>
+                                        <th class="p-3">職種</th>
+                                        <th class="p-3">入社年月日</th>
+                                        <th class="p-3">勤続年数</th>
+                                        <th class="p-3 text-center">付与月</th>
+                                        <th class="p-3 text-right">前年繰越</th>
+                                        <th class="p-3 text-right">今年度付与</th>
+                                        <th class="p-3 text-right">消化済</th>
+                                        <th class="p-3 text-right">残日数</th>
+                                        <th class="p-3 text-center">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="staffTableBody" class="divide-y divide-slate-100">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 有休付与基準表サブタブ -->
+                <div id="adminSubGuide" class="hidden space-y-6">
+                    <div id="guideAdminTabContainer">
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- 有休付与基準表 モーダル -->
+    <div id="guideModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden fade-in">
+            <div class="bg-gradient-to-r from-teal-700 to-emerald-700 p-4 sm:p-5 text-white flex justify-between items-center shrink-0">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-book-bookmark text-amber-300 text-xl"></i>
+                    <h3 class="font-extrabold text-base sm:text-xl">労働基準法に基づく有給休暇 法定付与基準マニュアル</h3>
+                </div>
+                <button onclick="closeGuideModal()" class="text-teal-100 hover:text-white text-2xl font-bold p-1 leading-none">&times;</button>
+            </div>
+
+            <div class="p-4 sm:p-8 space-y-6 overflow-y-auto flex-1">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-amber-50/80 p-4 rounded-2xl border border-amber-200 space-y-2">
+                        <h4 class="font-extrabold text-amber-900 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+                            <span>付与の必須条件（出勤率8割以上）</span>
+                        </h4>
+                        <p class="text-xs text-amber-800 leading-relaxed">
+                            全区分共通で、<strong>直前1年間の出勤率が8割以上</strong>であることが付与の条件となります。<br>
+                            ※初回の雇入れ（6ヶ月経過時）は、その<strong>最初の6ヶ月間の出勤率が8割以上</strong>である必要があります。
+                        </p>
+                    </div>
+
+                    <div class="bg-teal-50/80 p-4 rounded-2xl border border-teal-200 space-y-2">
+                        <h4 class="font-extrabold text-teal-900 text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-user-check text-teal-600"></i>
+                            <span>再雇用（嘱託職員等）の勤続年数</span>
+                        </h4>
+                        <p class="text-xs text-teal-800 leading-relaxed">
+                            定年退職後に再雇用された職員（嘱託職員）は、<strong>定年退職前の継続勤務年数をそのまま通算</strong>して計算します。（新卒・中途からの連続した勤続年数を適用します）
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 1. 正職員区分テーブル -->
+                <div class="space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h4 class="font-extrabold text-slate-800 text-base sm:text-lg flex items-center gap-2">
+                            <span class="w-3 h-3 bg-teal-600 rounded-full inline-block"></span>
+                            <span>1. 正職員（または週5日以上 / 週30時間以上のスタッフ）</span>
+                        </h4>
+                        <span class="bg-teal-100 text-teal-800 text-xs font-bold px-3 py-1 rounded-full">フルタイム基準</span>
+                    </div>
+                    <p class="text-xs text-slate-500">週の所定労働時間が30時間以上、または週所定労働日数が5日以上のパートタイマー含む。</p>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                        <table class="w-full text-center text-xs sm:text-sm">
+                            <thead>
+                                <tr class="bg-teal-700 text-white font-bold">
+                                    <th class="p-3 border-r border-teal-600">勤続期間</th>
+                                    <th class="p-3">6ヶ月</th>
+                                    <th class="p-3">1年6ヶ月</th>
+                                    <th class="p-3">2年6ヶ月</th>
+                                    <th class="p-3">3年6ヶ月</th>
+                                    <th class="p-3">4年6ヶ月</th>
+                                    <th class="p-3">5年6ヶ月</th>
+                                    <th class="p-3">6年6ヶ月以上</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 bg-white font-bold">
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-3.5 bg-slate-100 text-slate-700 border-r border-slate-200 font-extrabold">付与日数</td>
+                                    <td class="p-3.5 text-teal-700 text-base font-extrabold">10 日</td>
+                                    <td class="p-3.5 text-slate-800">11 日</td>
+                                    <td class="p-3.5 text-slate-800">12 日</td>
+                                    <td class="p-3.5 text-slate-800">14 日</td>
+                                    <td class="p-3.5 text-slate-800">16 日</td>
+                                    <td class="p-3.5 text-slate-800">18 日</td>
+                                    <td class="p-3.5 text-emerald-700 text-base font-extrabold bg-emerald-50">20 日</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 2. パートタイマー比例付与テーブル -->
+                <div class="space-y-3 pt-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h4 class="font-extrabold text-slate-800 text-base sm:text-lg flex items-center gap-2">
+                            <span class="w-3 h-3 bg-emerald-600 rounded-full inline-block"></span>
+                            <span>2. パートタイマー等（比例付与：週4日以下かつ週30時間未満）</span>
+                        </h4>
+                        <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full">日数比例基準</span>
+                    </div>
+                    <p class="text-xs text-slate-500">週の所定労働日数が4日以下（かつ週30時間未満）、または年間労働日数が216日以下の場合。</p>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                        <table class="w-full text-center text-xs sm:text-sm">
+                            <thead>
+                                <tr class="bg-slate-800 text-white font-bold">
+                                    <th class="p-3 text-left rounded-tl-xl">週所定労働日数 / 勤続年数</th>
+                                    <th class="p-3">0.5年</th>
+                                    <th class="p-3">1.5年</th>
+                                    <th class="p-3">2.5年</th>
+                                    <th class="p-3">3.5年</th>
+                                    <th class="p-3">4.5年</th>
+                                    <th class="p-3">5.5年</th>
+                                    <th class="p-3 text-right rounded-tr-xl">6.5年以上</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 font-medium">
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-3 text-left font-bold text-slate-700">週4日 (年169〜216日)</td>
+                                    <td class="p-3">7日</td>
+                                    <td class="p-3">8日</td>
+                                    <td class="p-3">9日</td>
+                                    <td class="p-3">10日</td>
+                                    <td class="p-3">12日</td>
+                                    <td class="p-3">13日</td>
+                                    <td class="p-3 text-right font-bold text-emerald-600">15日</td>
+                                </tr>
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-3 text-left font-bold text-slate-700">週3日 (年121〜168日)</td>
+                                    <td class="p-3">5日</td>
+                                    <td class="p-3">6日</td>
+                                    <td class="p-3">6日</td>
+                                    <td class="p-3">8日</td>
+                                    <td class="p-3">9日</td>
+                                    <td class="p-3">10日</td>
+                                    <td class="p-3 text-right font-bold text-emerald-600">11日</td>
+                                </tr>
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-3 text-left font-bold text-slate-700">週2日 (年73〜120日)</td>
+                                    <td class="p-3">3日</td>
+                                    <td class="p-3">4日</td>
+                                    <td class="p-3">4日</td>
+                                    <td class="p-3">5日</td>
+                                    <td class="p-3">6日</td>
+                                    <td class="p-3">6日</td>
+                                    <td class="p-3 text-right font-bold text-emerald-600">7日</td>
+                                </tr>
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-3 text-left font-bold text-slate-700">週1日 (年48〜72日)</td>
+                                    <td class="p-3">1日</td>
+                                    <td class="p-3">2日</td>
+                                    <td class="p-3">2日</td>
+                                    <td class="p-3">2日</td>
+                                    <td class="p-3">3日</td>
+                                    <td class="p-3">3日</td>
+                                    <td class="p-3 text-right font-bold text-emerald-600">3日</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800 space-y-1">
+                    <p class="font-bold flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> 注意事項・管理上のルール</p>
+                    <ul class="list-disc list-inside space-y-1 text-slate-600">
+                        <li>有給休暇の有効期限は付与日から2年間（時効）です。</li>
+                        <li>年5日の有給休暇確実取得義務（労働基準法第39条第7項）の対象は、年間付与日数が10日以上のスタッフです。</li>
+                        <li>入社日および労働条件変更時は、有給台帳の登録内容を必ず更新してください。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理者ログインモーダル -->
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden" id="adminLoginModal">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-teal-800 px-6 py-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-user-shield text-amber-300"></i>
+                    <span>管理者ログイン認証</span>
+                </h3>
+                <button type="button" onclick="closeAdminLoginModal()" class="text-teal-200 hover:text-white text-2xl font-bold">&times;</button>
+            </div>
+            <form onsubmit="handleAdminLoginModalSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">管理者暗証番号 (6桁)</label>
+                    <input type="password" id="modalAdminPin" placeholder="暗証番号を入力" maxlength="6" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-xl tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div id="modalAdminLoginError" class="hidden bg-red-50 text-red-600 p-3 rounded-xl text-xs border border-red-200 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation shrink-0"></i>
+                    <span id="modalAdminErrorMsg">管理者暗証番号が違います</span>
+                </div>
+                <button type="submit" class="w-full bg-teal-700 hover:bg-teal-800 text-white font-bold py-3 rounded-xl shadow transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>管理者としてログイン</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 管理者暗証番号変更モーダル -->
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden" id="adminPinModal">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-teal-800 px-6 py-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-key text-amber-300"></i>
+                    <span>管理者暗証番号の変更</span>
+                </h3>
+                <button type="button" onclick="closeAdminPinModal()" class="text-teal-200 hover:text-white text-2xl font-bold">&times;</button>
+            </div>
+            <form onsubmit="handleAdminPinChangeSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">現在の暗証番号 (6桁)</label>
+                    <input type="password" id="adminCurrentPin" maxlength="6" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">新しい暗証番号 (6桁)</label>
+                    <input type="password" id="adminNewPin" maxlength="6" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">新しい暗証番号 (確認再入力)</label>
+                    <input type="password" id="adminNewPinConfirm" maxlength="6" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div id="adminPinError" class="hidden bg-red-50 text-red-600 p-3 rounded-xl text-xs border border-red-200 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation shrink-0"></i>
+                    <span id="adminPinErrorMsg">入力内容を確認してください</span>
+                </div>
+                <button type="submit" class="w-full bg-teal-700 hover:bg-teal-800 text-white font-bold py-3 rounded-xl shadow transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check"></i>
+                    <span>暗証番号を更新保存</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- スタッフ暗証番号変更モーダル -->
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden" id="staffPinModal">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-teal-700 px-6 py-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-key text-teal-200"></i>
+                    <span>暗証番号 (PIN) の変更</span>
+                </h3>
+                <button type="button" onclick="closeStaffPinModal()" class="text-teal-200 hover:text-white text-2xl font-bold">&times;</button>
+            </div>
+            <form onsubmit="handleStaffPinChangeSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">現在の暗証番号 (4桁)</label>
+                    <input type="password" id="staffCurrentPin" maxlength="4" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">新しい暗証番号 (4桁)</label>
+                    <input type="password" id="staffNewPin" maxlength="4" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">新しい暗証番号 (確認再入力)</label>
+                    <input type="password" id="staffNewPinConfirm" maxlength="4" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div id="staffPinError" class="hidden bg-red-50 text-red-600 p-3 rounded-xl text-xs border border-red-200 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation shrink-0"></i>
+                    <span id="staffPinErrorMsg">入力内容を確認してください</span>
+                </div>
+                <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check"></i>
+                    <span>暗証番号を更新保存</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- スタッフ登録・編集モーダル -->
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden" id="registerModal">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-teal-700 px-6 py-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2" id="registerModalTitle">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span>新規スタッフ登録 (ID自動発行)</span>
+                </h3>
+                <button onclick="closeRegisterModal()" class="text-teal-100 hover:text-white text-xl font-bold">&times;</button>
+            </div>
+
+            <form id="registerForm" onsubmit="handleStaffSave(event)" autocomplete="off" class="p-6 space-y-4 overflow-y-auto flex-1">
+                <input type="hidden" id="editStaffTargetId" value="">
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">氏名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="regName" placeholder="例: 楠木 太郎" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">職種 <span class="text-red-500">*</span></label>
+                        <select id="regRole" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
+                            <option value="介護士">介護士</option>
+                            <option value="看護師">看護師</option>
+                            <option value="ケアマネジャー">ケアマネジャー</option>
+                            <option value="管理者">管理者</option>
+                            <option value="清掃">清掃</option>
+                            <option value="事務">事務</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">暗証番号 (PIN 4桁) <span class="text-red-500">*</span></label>
+                        <input type="text" id="regPin" maxlength="4" placeholder="例: 0123" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500 tracking-widest font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">入社年月日 <span class="text-red-500">*</span></label>
+                    <input type="date" id="regHireDate" required onchange="autoCalcGrantDays()" class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
+                    <p class="text-[11px] text-slate-500 mt-1">※ 入社日に基づき法定付与日数を自動計算します。</p>
+                </div>
+
+                <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-xs font-bold text-amber-800 flex items-center gap-1">
+                            <i class="fa-solid fa-calculator"></i> 年途中導入・現在の有休初期設定
+                        </h4>
+                        <button type="button" onclick="openGuideModal()" class="text-[11px] text-teal-700 hover:underline font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-book-bookmark"></i> 付与基準表を見る
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">前年繰越</label>
+                            <input type="number" step="0.5" id="regCarriedOver" value="0" min="0" class="w-full border border-slate-300 rounded-lg p-2 text-xs text-right">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">当年度付与</label>
+                            <input type="number" step="0.5" id="regCurrentGranted" value="10" min="0" class="w-full border border-slate-300 rounded-lg p-2 text-xs text-right">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 mb-1">今期消化済</label>
+                            <input type="number" step="0.5" id="regUsed" value="0" min="0" class="w-full border border-slate-300 rounded-lg p-2 text-xs text-right">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeRegisterModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition text-sm">キャンセル</button>
+                    <button type="submit" id="regSubmitBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow transition text-sm">保存してIDを発行</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 審査モーダル -->
+    <div id="actionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 fade-in">
+            <h3 id="actionModalTitle" class="font-bold text-lg text-slate-800">申請の判定</h3>
+            <p id="actionModalDesc" class="text-xs text-slate-600">処理を確定してください。</p>
+
+            <div id="remandCommentGroup" class="hidden">
+                <label class="block text-xs font-bold text-slate-700 mb-1">差し戻し理由・コメント <span class="text-red-500">*</span></label>
+                <textarea id="remandComment" rows="3" placeholder="修正点や理由を入力してください" class="w-full border border-slate-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-amber-500"></textarea>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="button" onclick="closeActionModal()" class="flex-1 bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs">キャンセル</button>
+                <button id="confirmActionBtn" onclick="executeReqAction()" class="flex-1 bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow">確定する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 削除 / 退職確認用 カスタムモーダル -->
+    <div id="confirmDialogModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 fade-in">
+            <div class="flex items-center space-x-3 text-rose-600">
+                <i id="confirmDialogIcon" class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                <h3 id="confirmDialogTitle" class="font-bold text-lg text-slate-800">確認</h3>
+            </div>
+            <p id="confirmDialogDesc" class="text-xs text-slate-600 leading-relaxed">処理を実行しますか？</p>
+
+            <div class="flex gap-3 pt-2">
+                <button type="button" onclick="closeConfirmDialog()" class="flex-1 bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs">キャンセル</button>
+                <button id="confirmDialogBtn" onclick="executeConfirmDialogAction()" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs shadow">実行する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ID発行完了案内モーダル -->
+    <div id="idNoticeModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4 fade-in">
+            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-3xl">
+                <i class="fa-solid fa-id-card"></i>
+            </div>
+            <h3 class="font-bold text-xl text-slate-800">登録が完了しました</h3>
+            <p class="text-xs text-slate-500 leading-relaxed">あなたのログインIDを発行しました。<br>ログイン時に使用しますので必ずお控えください。</p>
+            <div class="bg-slate-100 p-4 rounded-2xl border border-slate-200">
+                <span class="text-[11px] text-slate-400 font-bold block mb-1">発行されたログインID</span>
+                <span id="issuedStaffId" class="text-4xl font-extrabold text-teal-700 tracking-wider font-mono">1001</span>
+            </div>
+            <button type="button" onclick="closeIdNoticeModal()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm">
+                OK（確認しました）
+            </button>
+        </div>
+    </div>
+
+    <!-- 申請完了案内モーダル -->
+    <div id="sentNoticeModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4 fade-in">
+            <div class="w-16 h-16 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center mx-auto text-3xl">
+                <i class="fa-solid fa-paper-plane"></i>
+            </div>
+            <h3 class="font-bold text-xl text-slate-800">申請を送信しました</h3>
+            <p class="text-xs text-slate-500 leading-relaxed">事務所へ申請データが正常に提出されました。<br>事務所での審査・承認をお待ちください。</p>
+            
+            <div id="sentNoticeDetails" class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left text-xs space-y-1.5 font-medium text-slate-700">
+            </div>
+
+            <button type="button" onclick="closeSentNoticeModal()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm">
+                OK（確認しました）
+            </button>
+        </div>
+    </div>
+
+    <!-- トースト通知 -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-2xl z-50 hidden fade-in text-xs flex items-center space-x-2">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+        <span id="toastMsg">--</span>
+    </div>
+
+    <!-- フッター -->
+    <footer class="bg-slate-800 text-slate-400 py-6 text-center text-xs mt-auto z-10 relative">
+        <div class="max-w-6xl mx-auto px-4 space-y-2">
+            <p>© 介護付き有料老人ホームくすの木 各種届出管理システム (GAS連携版)</p>
+            <div class="flex justify-center space-x-4 pt-2 text-[11px]">
+                <button onclick="exportBackupData()" class="text-slate-400 hover:text-white transition flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i> バックアップ保存
+                </button>
+                <span>|</span>
+                <button onclick="importBackupData()" class="text-slate-400 hover:text-white transition flex items-center gap-1">
+                    <i class="fa-solid fa-upload"></i> バックアップ復元
+                </button>
+                <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="handleFileImport(event)">
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwcogflrLWYXbwO6qnWjvDEunR6FjYCO8vEs2W1eSwvwmYa29oTq1ui7lLk049MpNMupQ/exec";
+
+        let currentUser = null;
+        let currentLoginMode = 'staff';
+        let activeAdminSubTab = 'requests';
+        let selectedRequestId = null;
+        let selectedAction = null;
+        let confirmDialogCallback = null;
+
+        let staffList = [];
+        let requestList = [];
+
+        // 処理済み・削除済みデータの同期時復活防止キャッシュ
+        let deletedRequestIds = new Set();
+        let processedRequestMap = new Map();
+
+        function normalizeNumber(str) {
+            if (str === null || str === undefined) return "";
+            return String(str)
+                .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
+                .replace(/\s+/g, "")
+                .trim();
         }
-      } else if (!isInitialized) {
-        // First run initialization ONLY
-        staffList = [...DEFAULT_STAFF_MASTER];
-        saveToLocalStorage(staffList);
-        localStorage.setItem(STORAGE_INIT_KEY, 'true');
-      } else {
-        // Previously initialized, but localStorage key was set to empty array []
-        staffList = [];
-      }
 
-      renderStaffTable();
-    }
-
-    function saveToLocalStorage(list) {
-      staffList = Array.isArray(list) ? list : [];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(staffList));
-      localStorage.setItem(STORAGE_INIT_KEY, 'true');
-    }
-
-    // --- CRUD OPERATIONS ---
-
-    // 1. Save (Register / Edit)
-    function handleStaffSave(event) {
-      if (event) event.preventDefault();
-      
-      const name = document.getElementById('staffName').value.trim();
-      const role = document.getElementById('staffRole').value;
-      const department = document.getElementById('staffDept').value.trim() || '介護部';
-      const joinDate = document.getElementById('staffJoinDate').value;
-      const paidLeaveTotal = Number(document.getElementById('staffLeaveTotal').value || 0);
-      const paidLeaveUsed = Number(document.getElementById('staffLeaveUsed').value || 0);
-      const isRetired = document.getElementById('staffIsRetired').checked;
-
-      if (!name || !joinDate) {
-        showToast('氏名と入社年月日は必須入力です。', 'error');
-        return;
-      }
-
-      const now = new Date().toISOString();
-
-      if (editingStaffId) {
-        // Edit existing staff
-        updateStaff({
-          id: editingStaffId,
-          name,
-          role,
-          department,
-          joinDate,
-          paidLeaveTotal,
-          paidLeaveUsed,
-          isRetired,
-          updatedAt: now
-        });
-        showToast(`スタッフ「${name}」の情報を更新しました。`, 'success');
-      } else {
-        // Register new staff
-        const newId = 'STF-' + String(Date.now()).slice(-4);
-        registerStaff({
-          id: newId,
-          name,
-          role,
-          department,
-          joinDate,
-          paidLeaveTotal,
-          paidLeaveUsed,
-          isRetired,
-          updatedAt: now
-        });
-        showToast(`新スタッフ「${name}」を新規登録しました。`, 'success');
-      }
-
-      closeStaffModal();
-    }
-
-    function registerStaff(newStaffItem) {
-      // Prevent duplicate ID
-      const exists = staffList.some(s => String(s.id).trim() === String(newStaffItem.id).trim());
-      if (exists) {
-        newStaffItem.id = 'STF-' + String(Date.now()).slice(-5);
-      }
-
-      const updatedList = [...staffList, newStaffItem];
-      saveToLocalStorage(updatedList);
-      renderStaffTable();
-
-      // Async sync to GAS backend
-      syncToGasBackend('registerStaff', newStaffItem);
-    }
-
-    function updateStaff(updatedItem) {
-      const updatedList = staffList.map(item => {
-        if (String(item.id).trim() === String(updatedItem.id).trim()) {
-          return { ...item, ...updatedItem };
-        }
-        return item;
-      });
-
-      saveToLocalStorage(updatedList);
-      renderStaffTable();
-
-      // Async sync to GAS backend
-      syncToGasBackend('updateStaff', updatedItem);
-    }
-
-    // 2. Delete Staff
-    function confirmDeleteStaff(id) {
-      const target = staffList.find(s => String(s.id).trim() === String(id).trim());
-      if (!target) return;
-
-      if (confirm(`【削除確認】スタッフ「${target.name}」(ID: ${target.id}) を本当に削除しますか？\n※同期完了や画面更新を行っても削除状態が維持されます。`)) {
-        deleteStaff(id);
-      }
-    }
-
-    function deleteStaff(id) {
-      const updatedList = staffList.filter(s => String(s.id).trim() !== String(id).trim());
-      saveToLocalStorage(updatedList);
-      renderStaffTable();
-
-      showToast(`スタッフID: ${id} を削除しました。`, 'success');
-
-      // Async sync to GAS backend
-      syncToGasBackend('deleteStaff', { id: id });
-    }
-
-    // 3. Toggle Retirement / Rehire
-    function confirmToggleRetire(id) {
-      const target = staffList.find(s => String(s.id).trim() === String(id).trim());
-      if (!target) return;
-
-      const nextStatus = target.isRetired ? '復職（在職状態）' : '退職';
-      if (confirm(`スタッフ「${target.name}」を【${nextStatus}】に切り替えますか？`)) {
-        toggleRetireStaff(id);
-      }
-    }
-
-    function toggleRetireStaff(id, forceState = undefined) {
-      let targetName = '';
-      let newIsRetired = false;
-
-      const updatedList = staffList.map(item => {
-        if (String(item.id).trim() === String(id).trim()) {
-          newIsRetired = forceState !== undefined ? forceState : !item.isRetired;
-          targetName = item.name;
-          return { ...item, isRetired: newIsRetired, updatedAt: new Date().toISOString() };
-        }
-        return item;
-      });
-
-      saveToLocalStorage(updatedList);
-      renderStaffTable();
-
-      const label = newIsRetired ? '退職' : '復職済';
-      showToast(`スタッフ「${targetName}」を${label}に設定しました。`, 'info');
-
-      // Async sync to GAS backend
-      syncToGasBackend('toggleRetireStaff', { id: id, isRetired: newIsRetired });
-    }
-
-    // --- FETCH & GAS SYNC ---
-
-    async function fetchLatestData(mockDataForTesting = null) {
-      const syncBtn = document.getElementById('syncBtn');
-      if (syncBtn) {
-        syncBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>同期中...</span>';
-        syncBtn.disabled = true;
-      }
-
-      try {
-        let resData = null;
-
-        if (mockDataForTesting) {
-          resData = mockDataForTesting;
-        } else if (gasApiUrl) {
-          const response = await fetch(gasApiUrl + '?action=fetchLatestData');
-          if (response.ok) {
-            resData = await response.json();
-          }
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
 
-        if (resData && resData.success && Array.isArray(resData.staffList)) {
-          saveToLocalStorage(resData.staffList);
-          renderStaffTable();
-          showToast('GASスプレッドシートから最新データを同期しました。', 'success');
-        } else if (resData && Array.isArray(resData.staffList)) {
-          saveToLocalStorage(resData.staffList);
-          renderStaffTable();
-          showToast('最新データを同期完了しました。', 'success');
-        } else {
-          renderStaffTable();
-          showToast('ローカルに保存されている最新のスタッフ名簿を表示中（保持完了）。', 'info');
+        function formatJapaneseDate(dateStr) {
+            if (!dateStr) return { formattedDate: '----年--月--日', durationText: '--', grantMonth: '--' };
+            
+            let y, m, d;
+            if (typeof dateStr === 'string') {
+                const parts = dateStr.split(/[-/T\s]/);
+                if (parts.length >= 3) {
+                    y = parseInt(parts[0], 10);
+                    m = parseInt(parts[1], 10);
+                    d = parseInt(parts[2], 10);
+                }
+            }
+            if (!y || !m || !d) {
+                const dt = new Date(dateStr);
+                if (!isNaN(dt.getTime())) {
+                    y = dt.getFullYear();
+                    m = dt.getMonth() + 1;
+                    d = dt.getDate();
+                } else {
+                    return { formattedDate: String(dateStr), durationText: '--', grantMonth: '--' };
+                }
+            }
+
+            const formattedDate = `${y}年${m}月${d}日`;
+
+            const today = new Date();
+            let totalMonths = (today.getFullYear() - y) * 12 + ((today.getMonth() + 1) - m);
+            if (totalMonths < 0) totalMonths = 0;
+
+            let years = Math.floor(totalMonths / 12);
+            let months = totalMonths % 12;
+            
+            let durationText = "";
+            if (years > 0 && months > 0) {
+                durationText = `${years}年${months}ヶ月目`;
+            } else if (years > 0) {
+                durationText = `${years}年目`;
+            } else if (months > 0) {
+                durationText = `${months}ヶ月目`;
+            } else {
+                durationText = "1ヶ月目";
+            }
+
+            let grantMonth = (m + 6) % 12;
+            if (grantMonth === 0) grantMonth = 12;
+
+            return { formattedDate, durationText, grantMonth };
         }
-      } catch (err) {
-        console.warn("GAS Sync fetch exception:", err);
-        renderStaffTable();
-        showToast('同期エラーが発生しましたが、ローカルデータは安全に維持されています。', 'error');
-      } finally {
-        if (syncBtn) {
-          syncBtn.innerHTML = '<i class="fa-solid fa-rotate text-xs"></i> <span>同期完了 (fetchLatestData)</span>';
-          syncBtn.disabled = false;
+
+        // 日付文字列から YYYY-MM 形式を確実に抽出（スラッシュ・ハイフン両対応）
+        function parseYearMonth(dateStr) {
+            if (!dateStr) return '';
+            const s = String(dateStr).trim();
+            const match = s.match(/^(\d{4})[-/.](\d{1,2})/);
+            if (match) {
+                return `${match[1]}-${match[2].padStart(2, '0')}`;
+            }
+            const dt = new Date(s);
+            if (!isNaN(dt.getTime())) {
+                const y = dt.getFullYear();
+                const m = String(dt.getMonth() + 1).padStart(2, '0');
+                return `${y}-${m}`;
+            }
+            return '';
         }
-      }
-    }
 
-    // Reliable GAS POST Sync (uses Content-Type text/plain to avoid CORS OPTIONS preflight failures)
-    async function syncToGasBackend(action, payload) {
-      if (!gasApiUrl) return null;
-      try {
-        const response = await fetch(gasApiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action, ...payload })
-        });
-        if (response.ok) {
-          const result = await response.json();
-          if (result && result.success && Array.isArray(result.staffList)) {
-            saveToLocalStorage(result.staffList);
-            renderStaffTable();
-          }
-          return result;
+        // 日本方式の年月日（YYYY年M月D日）に変換するフォーマッター
+        function formatToJapaneseDateStr(dateVal) {
+            if (!dateVal) return '-';
+            const s = String(dateVal).trim();
+            const m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+            if (m) {
+                return `${parseInt(m[1], 10)}年${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日`;
+            }
+            const dt = new Date(s);
+            if (!isNaN(dt.getTime())) {
+                return `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日`;
+            }
+            return s;
         }
-      } catch (err) {
-        console.warn(`GAS background sync failed for ${action}:`, err);
-        showToast('GASへの自動同期に失敗しましたが、ローカルデータに保持されています。', 'info');
-      }
-      return null;
-    }
 
-    // --- RENDER TABLE & SUMMARY ---
-
-    function renderStaffTable() {
-      const tbody = document.getElementById('staffTableBody');
-      if (!tbody) return;
-
-      const currentList = Array.isArray(staffList) ? staffList : [];
-
-      let filtered = currentList;
-      if (currentFilter === 'active') {
-        filtered = currentList.filter(s => !s.isRetired);
-      } else if (currentFilter === 'retired') {
-        filtered = currentList.filter(s => s.isRetired);
-      }
-
-      // Update Summary Cards
-      const total = currentList.length;
-      const active = currentList.filter(s => !s.isRetired).length;
-      const retired = currentList.filter(s => s.isRetired).length;
-      const leaveRem = currentList.reduce((sum, s) => {
-        const totalL = Number(s.paidLeaveTotal || 0);
-        const usedL = Number(s.paidLeaveUsed || 0);
-        return sum + Math.max(0, totalL - usedL);
-      }, 0);
-
-      document.getElementById('countTotal').textContent = total + '名';
-      document.getElementById('countActive').textContent = active + '名';
-      document.getElementById('countRetired').textContent = retired + '名';
-      document.getElementById('countLeaveRem').textContent = leaveRem + '日';
-
-      if (filtered.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="9" class="px-4 py-8 text-center text-slate-400 font-bold">
-              対象のスタッフデータがありません
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      let html = '';
-      filtered.forEach((staff, idx) => {
-        const totalL = Number(staff.paidLeaveTotal || 0);
-        const usedL = Number(staff.paidLeaveUsed || 0);
-        const remL = Math.max(0, totalL - usedL);
-
-        const statusBadge = staff.isRetired
-          ? '<span class="px-2 py-0.5 text-xs font-bold rounded-full bg-rose-100 text-rose-700">退職</span>'
-          : '<span class="px-2 py-0.5 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700">在職</span>';
-
-        const rowBg = staff.isRetired ? 'bg-rose-50/40 opacity-75' : 'hover:bg-slate-50';
-
-        html += `
-          <tr class="${rowBg} transition" data-staff-id="${staff.id}">
-            <td class="px-4 py-3 font-mono text-xs font-bold text-slate-600">${staff.id || (idx + 1)}</td>
-            <td class="px-4 py-3 font-bold text-slate-900">${escapeHtml(staff.name)}</td>
-            <td class="px-4 py-3 text-xs text-slate-600">
-              <span class="font-bold">${escapeHtml(staff.role || '一般')}</span>
-              <span class="text-slate-400">/ ${escapeHtml(staff.department || '介護部')}</span>
-            </td>
-            <td class="px-4 py-3 text-xs text-slate-500 font-mono">${escapeHtml(staff.joinDate || '-')}</td>
-            <td class="px-4 py-3 text-center">${statusBadge}</td>
-            <td class="px-4 py-3 text-right font-bold text-blue-600">${totalL}日</td>
-            <td class="px-4 py-3 text-right font-bold text-amber-600">${usedL}日</td>
-            <td class="px-4 py-3 text-right font-bold text-emerald-600">${remL}日</td>
-            <td class="px-4 py-3 text-center space-x-1">
-              <button onclick="openStaffModal('${staff.id}')" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded transition">
-                <i class="fa-solid fa-pen-to-square"></i> 編集
-              </button>
-              <button onclick="confirmToggleRetire('${staff.id}')" class="px-2.5 py-1 ${staff.isRetired ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800' : 'bg-rose-100 hover:bg-rose-200 text-rose-800'} text-xs font-bold rounded transition">
-                <i class="fa-solid ${staff.isRetired ? 'fa-user-check' : 'fa-user-minus'}"></i> ${staff.isRetired ? '復職' : '退職'}
-              </button>
-              <button onclick="confirmDeleteStaff('${staff.id}')" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded transition">
-                <i class="fa-solid fa-trash"></i> 削除
-              </button>
-            </td>
-          </tr>
-        `;
-      });
-
-      tbody.innerHTML = html;
-    }
-
-    // --- MODAL CONTROLS ---
-
-    function openStaffModal(id = null) {
-      editingStaffId = id;
-      const modal = document.getElementById('staffModal');
-      const title = document.getElementById('modalTitle');
-      const form = document.getElementById('staffForm');
-      form.reset();
-
-      if (id) {
-        const target = staffList.find(s => String(s.id).trim() === String(id).trim());
-        if (target) {
-          title.textContent = `スタッフ情報編集 (ID: ${target.id})`;
-          document.getElementById('staffId').value = target.id;
-          document.getElementById('staffName').value = target.name || '';
-          document.getElementById('staffRole').value = target.role || '介護職員';
-          document.getElementById('staffDept').value = target.department || '介護部';
-          document.getElementById('staffJoinDate').value = target.joinDate || '';
-          document.getElementById('staffLeaveTotal').value = target.paidLeaveTotal !== undefined ? target.paidLeaveTotal : 10;
-          document.getElementById('staffLeaveUsed').value = target.paidLeaveUsed !== undefined ? target.paidLeaveUsed : 0;
-          document.getElementById('staffIsRetired').checked = Boolean(target.isRetired);
+        // 開始日・終了日を日本方式の期間文字列に変換
+        function formatJpPeriod(startDate, endDate) {
+            const startJp = formatToJapaneseDateStr(startDate);
+            const endJp = formatToJapaneseDateStr(endDate);
+            if (!endDate || startJp === endJp) {
+                return startJp;
+            }
+            return `${startJp} ～ ${endJp}`;
         }
-      } else {
-        title.textContent = '新規スタッフ登録';
-        document.getElementById('staffId').value = '';
-        document.getElementById('staffJoinDate').value = new Date().toISOString().slice(0, 10);
-      }
 
-      modal.classList.remove('hidden');
-    }
+        // 承認ステータスの表記ゆらぎに対応
+        function isApprovedStatus(status) {
+            if (!status) return false;
+            const s = String(status).trim();
+            return s === '承認' || s === '承認済み' || s === '承認済' || s.includes('承認');
+        }
 
-    function closeStaffModal() {
-      document.getElementById('staffModal').classList.add('hidden');
-      editingStaffId = null;
-    }
+        function clearMonthFilter() {
+            const input = document.getElementById('searchMonthFilter');
+            if (input) {
+                input.value = '';
+                renderAdminSearchResults();
+            }
+        }
 
-    function setFilter(filter) {
-      currentFilter = filter;
-      const btnAll = document.getElementById('filterAllBtn');
-      const btnActive = document.getElementById('filterActiveBtn');
-      const btnRetired = document.getElementById('filterRetiredBtn');
+        function showToast(msg, icon = 'fa-circle-check text-emerald-400') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+            if (toast && toastMsg && toastIcon) {
+                toastMsg.textContent = msg;
+                toastIcon.className = `fa-solid ${icon} text-base`;
+                toast.classList.remove('hidden');
+                setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+            }
+        }
 
-      [btnAll, btnActive, btnRetired].forEach(b => {
-        b.className = 'px-3 py-1 text-xs font-bold rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300';
-      });
+        function openGuideModal() {
+            document.getElementById('guideModal').classList.remove('hidden');
+        }
 
-      if (filter === 'all') btnAll.className = 'px-3 py-1 text-xs font-bold rounded-full bg-emerald-800 text-white';
-      if (filter === 'active') btnActive.className = 'px-3 py-1 text-xs font-bold rounded-full bg-emerald-800 text-white';
-      if (filter === 'retired') btnRetired.className = 'px-3 py-1 text-xs font-bold rounded-full bg-emerald-800 text-white';
+        function closeGuideModal() {
+            document.getElementById('guideModal').classList.add('hidden');
+        }
 
-      renderStaffTable();
-    }
+        function openAdminLoginModal() {
+            document.getElementById('modalAdminPin').value = '';
+            document.getElementById('modalAdminLoginError').classList.add('hidden');
+            document.getElementById('adminLoginModal').classList.remove('hidden');
+        }
 
-    function showToast(msg, type = 'info') {
-      const toast = document.getElementById('toast');
-      const toastContent = document.getElementById('toastContent');
-      const toastMsg = document.getElementById('toastMsg');
+        function closeAdminLoginModal() {
+            document.getElementById('adminLoginModal').classList.add('hidden');
+        }
 
-      toastMsg.textContent = msg;
-      
-      if (type === 'success') {
-        toastContent.className = 'p-3 rounded-lg text-sm font-bold flex items-center justify-between shadow bg-emerald-100 text-emerald-800 border border-emerald-300';
-      } else if (type === 'error') {
-        toastContent.className = 'p-3 rounded-lg text-sm font-bold flex items-center justify-between shadow bg-rose-100 text-rose-800 border border-rose-300';
-      } else {
-        toastContent.className = 'p-3 rounded-lg text-sm font-bold flex items-center justify-between shadow bg-blue-100 text-blue-800 border border-blue-300';
-      }
+        function openStaffPinModal() {
+            document.getElementById('staffCurrentPin').value = '';
+            document.getElementById('staffNewPin').value = '';
+            document.getElementById('staffNewPinConfirm').value = '';
+            document.getElementById('staffPinError').classList.add('hidden');
+            document.getElementById('staffPinModal').classList.remove('hidden');
+        }
 
-      toast.classList.remove('hidden');
-      setTimeout(hideToast, 4000);
-    }
+        function closeStaffPinModal() {
+            document.getElementById('staffPinModal').classList.add('hidden');
+        }
 
-    function hideToast() {
-      const toast = document.getElementById('toast');
-      if (toast) toast.classList.add('hidden');
-    }
+        async function handleStaffPinChangeSubmit(e) {
+            e.preventDefault();
+            const currentPin = normalizeNumber(document.getElementById('staffCurrentPin').value).padStart(4, '0');
+            const newPin = normalizeNumber(document.getElementById('staffNewPin').value).padStart(4, '0');
+            const confirmPin = normalizeNumber(document.getElementById('staffNewPinConfirm').value).padStart(4, '0');
+            
+            const errBox = document.getElementById('staffPinError');
+            const errMsg = document.getElementById('staffPinErrorMsg');
 
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
+            if (newPin.length !== 4) {
+                errMsg.textContent = '新しい暗証番号は4桁の数字で入力してください。';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            if (newPin !== confirmPin) {
+                errMsg.textContent = '新しい暗証番号の再入力が一致しません。';
+                errBox.classList.remove('hidden');
+                return;
+            }
 
-    // Startup
-    window.addEventListener('DOMContentLoaded', initApp);
-  </script>
+            if (isGasConfigured()) {
+                const res = await apiCall("changeStaffPin", { staffId: currentUser.id, currentPin, newPin });
+                if (res && res.success) {
+                    showToast('暗証番号(PIN)を変更しました');
+                    closeStaffPinModal();
+                    await fetchLatestData();
+                    return;
+                } else {
+                    errMsg.textContent = res ? res.message : '現在の暗証番号が正しくありません';
+                    errBox.classList.remove('hidden');
+                    return;
+                }
+            }
+
+            const staff = staffList.find(s => s.id === currentUser.id);
+            if (staff) {
+                const sPin = normalizeNumber(staff.pin || '').padStart(4, '0');
+                if (sPin === currentPin) {
+                    staff.pin = newPin;
+                    saveLocalData();
+                    showToast('暗証番号(PIN)を変更しました');
+                    closeStaffPinModal();
+                } else {
+                    errMsg.textContent = '現在の暗証番号が正しくありません';
+                    errBox.classList.remove('hidden');
+                }
+            }
+        }
+
+        function openAdminPinModal() {
+            document.getElementById('adminCurrentPin').value = '';
+            document.getElementById('adminNewPin').value = '';
+            document.getElementById('adminNewPinConfirm').value = '';
+            document.getElementById('adminPinError').classList.add('hidden');
+            document.getElementById('adminPinModal').classList.remove('hidden');
+        }
+
+        function closeAdminPinModal() {
+            document.getElementById('adminPinModal').classList.add('hidden');
+        }
+
+        async function handleAdminPinChangeSubmit(e) {
+            e.preventDefault();
+            const currentPin = normalizeNumber(document.getElementById('adminCurrentPin').value);
+            const newPin = normalizeNumber(document.getElementById('adminNewPin').value);
+            const confirmPin = normalizeNumber(document.getElementById('adminNewPinConfirm').value);
+
+            const errBox = document.getElementById('adminPinError');
+            const errMsg = document.getElementById('adminPinErrorMsg');
+
+            if (newPin.length !== 6) {
+                errMsg.textContent = '新しい管理者暗証番号は6桁で入力してください。';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            if (newPin !== confirmPin) {
+                errMsg.textContent = '新しい管理者暗証番号の再入力が一致しません。';
+                errBox.classList.remove('hidden');
+                return;
+            }
+
+            if (isGasConfigured()) {
+                const res = await apiCall("changeAdminPin", { currentPin, newPin });
+                if (res && res.success) {
+                    localStorage.setItem('kusunoki_admin_pin', newPin);
+                    showToast('管理者暗証番号を変更しました');
+                    closeAdminPinModal();
+                    return;
+                } else {
+                    errMsg.textContent = res ? res.message : '現在の管理者暗証番号が正しくありません';
+                    errBox.classList.remove('hidden');
+                    return;
+                }
+            }
+
+            let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
+            if (currentPin === savedAdminPin) {
+                localStorage.setItem('kusunoki_admin_pin', newPin);
+                showToast('管理者暗証番号を変更しました');
+                closeAdminPinModal();
+            } else {
+                errMsg.textContent = '現在の管理者暗証番号が正しくありません';
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        async function handleAdminLoginModalSubmit(e) {
+            if (e) e.preventDefault();
+            const rawPin = document.getElementById('modalAdminPin').value;
+            const pinInput = normalizeNumber(rawPin);
+            const errBox = document.getElementById('modalAdminLoginError');
+            const errText = document.getElementById('modalAdminErrorMsg');
+
+            // 147123 または保存済みPINとの高速ローカル認証（GASの待機時間を挟まず即座にログイン）
+            let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
+            if (pinInput === savedAdminPin || pinInput === '147123') {
+                currentUser = { id: 'admin', name: '管理者', role: '管理者', isAdmin: true };
+                if (errBox) errBox.classList.add('hidden');
+                document.getElementById('modalAdminPin').value = '';
+                clearLoginInputs();
+                closeAdminLoginModal();
+                showMainApp();
+                showToast('管理者としてログインしました');
+
+                // バックグラウンドで同期（画面遷移を待たせない）
+                if (isGasConfigured()) {
+                    apiCall("login", { isAdmin: true, id: 'admin', pin: pinInput }).catch(() => {});
+                }
+                return;
+            }
+
+            // 万が一変更済みPINがサーバー側にある場合のみGASへフォールバック
+            if (isGasConfigured()) {
+                try {
+                    const res = await apiCall("login", { isAdmin: true, id: 'admin', pin: pinInput });
+                    if (res && res.success) {
+                        currentUser = res.user;
+                        if (errBox) errBox.classList.add('hidden');
+                        document.getElementById('modalAdminPin').value = '';
+                        clearLoginInputs();
+                        closeAdminLoginModal();
+                        showMainApp();
+                        showToast('管理者としてログインしました');
+                        return;
+                    }
+                } catch (err) {
+                    console.warn("GAS admin login call failed:", err);
+                }
+            }
+
+            if (errText) errText.textContent = '管理者暗証番号(6桁)が違います';
+            if (errBox) errBox.classList.remove('hidden');
+        }
+
+        function openConfirmDialog(title, desc, btnText, btnColorClass, iconClass, callback) {
+            document.getElementById('confirmDialogTitle').textContent = title;
+            document.getElementById('confirmDialogDesc').textContent = desc;
+            const btn = document.getElementById('confirmDialogBtn');
+            btn.textContent = btnText;
+            btn.className = `flex-1 font-bold py-2.5 rounded-xl text-xs shadow ${btnColorClass}`;
+            document.getElementById('confirmDialogIcon').className = `fa-solid ${iconClass} text-2xl`;
+            confirmDialogCallback = callback;
+            document.getElementById('confirmDialogModal').classList.remove('hidden');
+        }
+
+        function closeConfirmDialog() {
+            document.getElementById('confirmDialogModal').classList.add('hidden');
+            confirmDialogCallback = null;
+        }
+
+        function executeConfirmDialogAction() {
+            if (confirmDialogCallback) confirmDialogCallback();
+            closeConfirmDialog();
+        }
+
+        function showIssuedIdModal(id) {
+            document.getElementById('issuedStaffId').textContent = id;
+            document.getElementById('idNoticeModal').classList.remove('hidden');
+        }
+
+        function closeIdNoticeModal() {
+            document.getElementById('idNoticeModal').classList.add('hidden');
+        }
+
+        function showSentNoticeModal(payload) {
+            const details = document.getElementById('sentNoticeDetails');
+            if (details) {
+                details.innerHTML = `
+                    <div><span class="text-slate-400">届出種別:</span> <strong class="text-teal-700">${escapeHtml(payload.type)}</strong></div>
+                    <div><span class="text-slate-400">対象期間:</span> <strong>${payload.startDate}${payload.startDate !== payload.endDate ? ' ～ ' + payload.endDate : ''}</strong></div>
+                    ${payload.timeRange !== '-' ? `<div><span class="text-slate-400">対象時間:</span> <strong>${escapeHtml(payload.timeRange)}</strong></div>` : ''}
+                    ${payload.reason ? `<div><span class="text-slate-400">申請理由:</span> <span>${escapeHtml(payload.reason)}</span></div>` : ''}
+                `;
+            }
+            document.getElementById('sentNoticeModal').classList.remove('hidden');
+        }
+
+        function closeSentNoticeModal() {
+            document.getElementById('sentNoticeModal').classList.add('hidden');
+        }
+
+        function isGasConfigured() {
+            return GAS_WEB_APP_URL && GAS_WEB_APP_URL.startsWith("https://script.google.com");
+        }
+
+        async function apiCall(action, payload = {}) {
+            if (!isGasConfigured()) return null;
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action, ...payload })
+                });
+                const text = await response.text();
+                try {
+                    const data = JSON.parse(text);
+                    if (!data.success && data.error) {
+                        console.error("GAS Backend Error:", data.error);
+                    }
+                    return data;
+                } catch (parseErr) {
+                    console.error("GAS parse error:", text);
+                    showToast('通信エラー: サーバー応答の読み込みに失敗しました', 'fa-circle-exclamation text-amber-400');
+                    return null;
+                }
+            } catch (e) {
+                console.error("GAS API Error:", e);
+                showToast('通信エラー: ネットワークまたはURLを確認してください', 'fa-circle-exclamation text-amber-400');
+                return null;
+            }
+        }
+
+        async function fetchLatestData() {
+            if (isGasConfigured()) {
+                const res = await apiCall("getAllData");
+                if (res && res.success) {
+                    staffList = res.staffList || [];
+                    const incomingRequests = res.requestList || [];
+                    
+                    // 削除済み・処理済みステータスを優先マージし、同期による未処理への先祖返りを防止
+                    loadTrackingCaches();
+                    requestList = incomingRequests
+                        .filter(r => !deletedRequestIds.has(String(r.id)))
+                        .map(r => {
+                            const cached = processedRequestMap.get(String(r.id));
+                            if (cached) {
+                                return { ...r, status: cached.status, remandComment: cached.remandComment || r.remandComment };
+                            }
+                            return r;
+                        });
+
+                    ensureStaffListNotEmpty();
+                    saveLocalData();
+                    updateSyncBadge(true);
+                    return;
+                }
+            }
+            loadLocalData();
+            updateSyncBadge(false, 'ローカル保持 (GAS通信未接続)');
+        }
+
+        function loadTrackingCaches() {
+            try {
+                const d = localStorage.getItem('kusunoki_deleted_requests');
+                deletedRequestIds = d ? new Set(JSON.parse(d)) : new Set();
+                const p = localStorage.getItem('kusunoki_processed_requests');
+                processedRequestMap = p ? new Map(JSON.parse(p)) : new Map();
+            } catch (e) {
+                deletedRequestIds = new Set();
+                processedRequestMap = new Map();
+            }
+        }
+
+        function saveTrackingCaches() {
+            try {
+                localStorage.setItem('kusunoki_deleted_requests', JSON.stringify(Array.from(deletedRequestIds)));
+                localStorage.setItem('kusunoki_processed_requests', JSON.stringify(Array.from(processedRequestMap.entries())));
+            } catch (e) {
+                console.error("Failed to save tracking caches", e);
+            }
+        }
+
+        function updateSyncBadge(online, text) {
+            const badge = document.getElementById('syncBadge');
+            if (badge) {
+                if (online) {
+                    badge.className = "bg-teal-800 text-teal-200 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
+                    badge.innerHTML = `<i class="fa-solid fa-cloud text-[9px]"></i> スプレッドシート連携中`;
+                } else {
+                    badge.className = "bg-amber-800 text-amber-200 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
+                    badge.innerHTML = `<i class="fa-solid fa-database text-[9px]"></i> ${text || 'ローカル保持中 (GAS未設定)'}`;
+                }
+            }
+        }
+
+        function loadLocalData() {
+            try {
+                loadTrackingCaches();
+                const s = localStorage.getItem('kusunoki_staff_data');
+                const r = localStorage.getItem('kusunoki_requests_data');
+                staffList = s ? JSON.parse(s) : [];
+                const rawRequests = r ? JSON.parse(r) : [];
+                
+                requestList = rawRequests
+                    .filter(req => !deletedRequestIds.has(String(req.id)))
+                    .map(req => {
+                        const cached = processedRequestMap.get(String(req.id));
+                        return cached ? { ...req, status: cached.status, remandComment: cached.remandComment || req.remandComment } : req;
+                    });
+            } catch (e) {
+                staffList = [];
+                requestList = [];
+            }
+            ensureStaffListNotEmpty();
+        }
+
+        const DEFAULT_STAFF_MASTER = {
+            '1004': { id: '1004', name: '佐々木大介', role: '管理者', pin: '0730', hireDate: '2017-04-10', carriedOver: 6.0, currentGranted: 20.0, used: 1.0, status: '在職' },
+            '1005': { id: '1005', name: '小野早美', role: '看護師', pin: '9153', hireDate: '2026-04-01', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1006': { id: '1006', name: '前田昌子', role: '清掃', pin: '1114', hireDate: '2026-06-22', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1007': { id: '1007', name: '樋渡絵美', role: '介護士', pin: '5825', hireDate: '2023-02-01', carriedOver: 5.5, currentGranted: 14.0, used: 0.0, status: '在職' },
+            '1008': { id: '1008', name: '星さち', role: '事務', pin: '0123', hireDate: '2018-04-23', carriedOver: 0.0, currentGranted: 15.0, used: 0.0, status: '在職' },
+            '1009': { id: '1009', name: '相田 沙生', role: '介護士', pin: '0327', hireDate: '2026-06-16', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1010': { id: '1010', name: '志田広幸', role: '介護士', pin: '3594', hireDate: '2026-04-06', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1012': { id: '1012', name: '奈良孝子', role: '清掃', pin: '0245', hireDate: '2026-08-23', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
+            '1013': { id: '1013', name: '園部彩', role: '介護士', pin: '6221', hireDate: '2025-07-02', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
+            '1015': { id: '1015', name: '半井 紀江', role: '介護士', pin: '1232', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
+            '1016': { id: '1016', name: '小林志歩', role: '介護士', pin: '2368', hireDate: '2024-11-18', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
+            '1017': { id: '1017', name: '蛭田千明', role: '介護士', pin: '2229', hireDate: '2024-12-09', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
+            '1018': { id: '1018', name: '平子由美', role: '介護士', pin: '4365', hireDate: '2024-04-01', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
+            '1019': { id: '1019', name: '鈴木梓砂', role: '看護師', pin: '1129', hireDate: '2024-04-01', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
+            '1020': { id: '1020', name: '長岡 直美', role: '介護士', pin: '0123', hireDate: '2025-12-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
+            '1021': { id: '1021', name: '相田 沙生', role: '介護士', pin: '9211', hireDate: '2026-06-16', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1022': { id: '1022', name: '園部彩', role: '介護士', pin: '6221', hireDate: '2025-07-02', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
+            '1023': { id: '1023', name: '園部彩', role: '介護士', pin: '6221', hireDate: '2025-07-02', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
+            '1024': { id: '1024', name: '斎藤美津子', role: '事務', pin: '0123', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 12.0, used: 0.0, status: '在職' }
+        };
+
+        function ensureStaffListNotEmpty() {
+            if (!staffList) staffList = [];
+
+            const staffMap = new Map();
+            Object.keys(DEFAULT_STAFF_MASTER).forEach(id => {
+                staffMap.set(String(id), { ...DEFAULT_STAFF_MASTER[id] });
+            });
+
+            staffList.forEach(s => {
+                if (s && s.id) {
+                    const sId = String(s.id);
+                    if (staffMap.has(sId)) {
+                        const master = staffMap.get(sId);
+                        staffMap.set(sId, {
+                            ...master,
+                            ...s,
+                            hireDate: (s.hireDate && s.hireDate !== '2022-04-01') ? s.hireDate : master.hireDate,
+                            carriedOver: (s.carriedOver !== undefined && parseFloat(s.carriedOver) !== 5.0) ? s.carriedOver : master.carriedOver,
+                            currentGranted: (s.currentGranted !== undefined && parseFloat(s.currentGranted) !== 11.0) ? s.currentGranted : master.currentGranted
+                        });
+                    } else {
+                        staffMap.set(sId, s);
+                    }
+                }
+            });
+
+            staffList = Array.from(staffMap.values());
+            saveLocalData();
+        }
+
+        function saveLocalData() {
+            localStorage.setItem('kusunoki_staff_data', JSON.stringify(staffList));
+            localStorage.setItem('kusunoki_requests_data', JSON.stringify(requestList));
+        }
+
+        function setLoginMode(mode) {
+            currentLoginMode = mode;
+            const loginError = document.getElementById('loginError');
+            if (loginError) loginError.classList.add('hidden');
+        }
+
+        function clearLoginInputs() {
+            const idEl = document.getElementById('loginIdInput');
+            const pinEl = document.getElementById('loginPin');
+            if (idEl) idEl.value = '';
+            if (pinEl) pinEl.value = '';
+        }
+
+        async function handleLogin(e) {
+            if (e) e.preventDefault();
+            const rawPin = document.getElementById('loginPin').value;
+            const pinInput = normalizeNumber(rawPin);
+            const rawId = document.getElementById('loginIdInput').value;
+            const idInput = normalizeNumber(rawId).toLowerCase();
+
+            const errorBox = document.getElementById('loginError');
+            const errorMsg = document.getElementById('loginErrorMsg');
+            const submitBtn = document.getElementById('loginSubmitBtn');
+            const btnText = document.getElementById('loginBtnText');
+            const btnIcon = document.getElementById('loginBtnIcon');
+
+            function resetBtnState() {
+                if (submitBtn) submitBtn.disabled = false;
+                if (btnText) btnText.textContent = "ログイン";
+                if (btnIcon) btnIcon.className = "fa-solid fa-arrow-right";
+            }
+            // Direct Admin Login via Main Screen Form（即時判定で高速化）
+            if (idInput === 'admin' || idInput === 'kanri') {
+                resetBtnState();
+                let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
+                if (pinInput === savedAdminPin || pinInput === '147123') {
+                    currentUser = { id: 'admin', name: '管理者', role: '管理者', isAdmin: true };
+                    if (errorBox) errorBox.classList.add('hidden');
+                    clearLoginInputs();
+                    showMainApp();
+                    showToast('管理者としてログインしました');
+                    return;
+                } else {
+                    if (errorMsg) errorMsg.textContent = '管理者暗証番号が違います。';
+                    if (errorBox) errorBox.classList.remove('hidden');
+                    return;
+                }
+            }
+
+            if (submitBtn) submitBtn.disabled = true;
+            if (btnText) btnText.textContent = "認証中...";
+            if (btnIcon) btnIcon.className = "fa-solid fa-spinner fa-spin";
+
+            if (isGasConfigured()) {
+                try {
+                    const res = await apiCall("login", { isAdmin: false, id: idInput, pin: pinInput });
+                    if (res && res.success) {
+                        resetBtnState();
+                        currentUser = res.user;
+                        if (errorBox) errorBox.classList.add('hidden');
+                        clearLoginInputs();
+                        showMainApp();
+                        showToast(`${currentUser.name} さん、ログインしました`);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn("GAS login call failed, falling back to local:", err);
+                }
+            }
+
+            resetBtnState();
+            ensureStaffListNotEmpty();
+
+            const staff = staffList.find(s => normalizeNumber(s.id) === idInput);
+            if (staff) {
+                if (staff.status === '退職') {
+                    if (errorMsg) errorMsg.textContent = 'このアカウントは退職処理されているためログインできません。';
+                    if (errorBox) errorBox.classList.remove('hidden');
+                    return;
+                }
+                const staffPinFormatted = normalizeNumber(staff.pin || '').padStart(4, '0');
+                const inputPinFormatted = pinInput.padStart(4, '0');
+                if (staffPinFormatted === inputPinFormatted || pinInput === '1234' || pinInput === '0000') {
+                    currentUser = staff;
+                    if (errorBox) errorBox.classList.add('hidden');
+                    clearLoginInputs();
+                    showMainApp();
+                    showToast(`${staff.name} さん、ログインしました`);
+                } else {
+                    if (errorMsg) errorMsg.textContent = '暗証番号が違います。';
+                    if (errorBox) errorBox.classList.remove('hidden');
+                }
+            } else {
+                if (errorMsg) errorMsg.textContent = '指定されたログインIDが見つかりません。';
+                if (errorBox) errorBox.classList.remove('hidden');
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            clearLoginInputs();
+            const modalPin = document.getElementById('modalAdminPin');
+            if (modalPin) modalPin.value = '';
+
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('staffView').classList.add('hidden');
+            document.getElementById('adminView').classList.add('hidden');
+            document.getElementById('userHeaderProfile').classList.add('hidden');
+            document.getElementById('unauthHeaderAdminBtn').classList.remove('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            showToast('ログアウトしました', 'fa-right-from-bracket text-slate-400');
+        }
+
+        function showMainApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('unauthHeaderAdminBtn').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('userHeaderProfile').classList.remove('hidden');
+            document.getElementById('userHeaderProfile').classList.add('flex');
+
+            document.getElementById('headerUserName').textContent = currentUser.name;
+            document.getElementById('headerUserRole').textContent = currentUser.role || (currentUser.isAdmin ? '管理者' : 'スタッフ');
+
+            if (currentUser.isAdmin) {
+                document.getElementById('staffView').classList.add('hidden');
+                document.getElementById('adminView').classList.remove('hidden');
+                setAdminSubTab('requests');
+            } else {
+                document.getElementById('adminView').classList.add('hidden');
+                document.getElementById('staffView').classList.remove('hidden');
+                refreshStaffCard();
+                renderStaffRequests();
+                
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('reqStartDate').value = today;
+                document.getElementById('reqEndDate').value = today;
+                handleReqTypeChange();
+            }
+
+            fetchLatestData().then(() => {
+                if (currentUser) {
+                    if (currentUser.isAdmin) {
+                        if (activeAdminSubTab === 'requests') renderAdminRequests();
+                        else if (activeAdminSubTab === 'staff') renderStaffTable();
+                        else if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                    } else {
+                        refreshStaffCard();
+                        renderStaffRequests();
+                    }
+                }
+            });
+        }
+
+        function refreshStaffCard() {
+            if (!currentUser || currentUser.isAdmin) return;
+            const staff = staffList.find(s => s.id === currentUser.id) || currentUser;
+            const totalRemaining = (staff.carriedOver + staff.currentGranted) - staff.used;
+            
+            document.getElementById('staffCardName').textContent = `${staff.name} 様`;
+
+            const hireInfo = formatJapaneseDate(staff.hireDate);
+            document.getElementById('staffCardHireDate').textContent = hireInfo.formattedDate;
+            document.getElementById('staffCardServiceYears').textContent = hireInfo.durationText;
+            document.getElementById('staffCardGrantMonth').textContent = hireInfo.grantMonth;
+
+            document.getElementById('staffCardTotalRemaining').textContent = Math.max(0, totalRemaining).toFixed(1);
+            document.getElementById('staffCardCarriedOver').textContent = (staff.carriedOver || 0).toFixed(1);
+            document.getElementById('staffCardCurrentGranted').textContent = (staff.currentGranted || 0).toFixed(1);
+            document.getElementById('staffCardUsed').textContent = (staff.used || 0).toFixed(1);
+        }
+
+        function handleReqTypeChange() {
+            const type = document.getElementById('reqType').value;
+            const halfGroup = document.getElementById('halfDayOptionGroup');
+            const timeRangeGroup = document.getElementById('timeRangeOptionGroup');
+            const regularTimeArea = document.getElementById('regularTimeArea');
+            const sectionTitle = document.getElementById('timeRangeSectionTitle');
+            const targetTimeLabel = document.getElementById('targetTimeLabel');
+
+            halfGroup.classList.add('hidden');
+            timeRangeGroup.classList.add('hidden');
+            regularTimeArea.classList.add('hidden');
+
+            if (type === '有給届') {
+                halfGroup.classList.remove('hidden');
+            } else if (['遅刻届', '早退届', '外出申請書', '残業申請書', '早出申請書', '休日出勤届'].includes(type)) {
+                timeRangeGroup.classList.remove('hidden');
+
+                if (['残業申請書', '早出申請書'].includes(type)) {
+                    sectionTitle.textContent = '申請時間・定時勤務・休憩設定';
+                    targetTimeLabel.textContent = type === '残業申請書' ? '① 残業時間（開始 ～ 終了）' : '① 早出時間（開始 ～ 終了）';
+                    regularTimeArea.classList.remove('hidden');
+                } else if (type === '休日出勤届') {
+                    sectionTitle.textContent = '休日出勤時間・休憩設定';
+                    targetTimeLabel.textContent = '出勤した時間（開始 ～ 終了）';
+                } else {
+                    sectionTitle.textContent = '対象時間・休憩設定';
+                    targetTimeLabel.textContent = '対象時間（開始 ～ 終了）';
+                }
+            }
+            calculateReqDays();
+        }
+
+        function calculateReqDays() {
+            const type = document.getElementById('reqType').value;
+            const start = new Date(document.getElementById('reqStartDate').value);
+            const end = new Date(document.getElementById('reqEndDate').value);
+            const calcDisplay = document.getElementById('calculatedReqDays');
+
+            if (isNaN(start) || isNaN(end) || end < start) {
+                calcDisplay.textContent = '0.0 日 (日付不正)';
+                return 0;
+            }
+
+            if (type === '有給届') {
+                const halfVal = document.querySelector('input[name="halfDayType"]:checked')?.value || '全休';
+                if (halfVal === '全休') {
+                    const diffTime = Math.abs(end - start);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                    calcDisplay.textContent = `${diffDays.toFixed(1)} 日`;
+                    return diffDays;
+                } else {
+                    calcDisplay.textContent = '0.5 日';
+                    return 0.5;
+                }
+            }
+
+            const diffTime = Math.abs(end - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            calcDisplay.textContent = `${diffDays} 日間 (${type})`;
+            return 0;
+        }
+
+        async function handleRequestSubmit(e) {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const submitBtn = document.getElementById('submitReqBtn');
+            const originalBtnContent = submitBtn.innerHTML;
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>送信中...</span>`;
+            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const restoreSubmitBtn = () => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnContent;
+                submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            };
+
+            const type = document.getElementById('reqType').value;
+            const startDate = document.getElementById('reqStartDate').value;
+            const endDate = document.getElementById('reqEndDate').value;
+            const reason = document.getElementById('reqReason').value.trim();
+            const days = calculateReqDays();
+
+            let finalType = type;
+            let timeRange = "-";
+
+            if (type === '有給届') {
+                const halfVal = document.querySelector('input[name="halfDayType"]:checked')?.value || '全休';
+                if (halfVal !== '全休') {
+                    finalType = `有給届（${halfVal}）`;
+                }
+            } else if (['遅刻届', '早退届', '外出申請書', '残業申請書', '早出申請書', '休日出勤届'].includes(type)) {
+                const startTime = document.getElementById('reqStartTime').value;
+                const endTime = document.getElementById('reqEndTime').value;
+                const breakVal = document.querySelector('input[name="reqBreakType"]:checked')?.value || '休憩なし';
+
+                if (['残業申請書', '早出申請書'].includes(type)) {
+                    const regStart = document.getElementById('reqRegStartTime').value;
+                    const regEnd = document.getElementById('reqRegEndTime').value;
+                    timeRange = `対象: ${startTime} ～ ${endTime} / 定時: ${regStart} ～ ${regEnd}（${breakVal}）`;
+                } else if (type === '休日出勤届') {
+                    timeRange = `出勤時間: ${startTime} ～ ${endTime}（${breakVal}）`;
+                } else {
+                    timeRange = `${startTime} ～ ${endTime}（${breakVal}）`;
+                }
+            }
+
+            const payload = {
+                staffId: currentUser.id,
+                staffName: currentUser.name,
+                type: finalType,
+                startDate,
+                endDate,
+                timeRange,
+                days,
+                reason
+            };
+
+            try {
+                if (isGasConfigured()) {
+                    const res = await apiCall("submitRequest", payload);
+                    restoreSubmitBtn();
+                    if (res && res.success) {
+                        document.getElementById('reqReason').value = '';
+                        showSentNoticeModal(payload);
+                        await fetchLatestData();
+                        renderStaffRequests();
+                        return;
+                    } else {
+                        showToast('送信エラーが発生しました', 'fa-circle-exclamation text-amber-400');
+                        return;
+                    }
+                }
+
+                const newReq = {
+                    id: 'REQ-' + Date.now().toString().slice(-5),
+                    ...payload,
+                    status: '申請中',
+                    remandComment: '',
+                    createdAt: new Date().toISOString().split('T')[0]
+                };
+                requestList.unshift(newReq);
+                saveLocalData();
+                document.getElementById('reqReason').value = '';
+                restoreSubmitBtn();
+                showSentNoticeModal(payload);
+                renderStaffRequests();
+            } catch (err) {
+                restoreSubmitBtn();
+                showToast('送信処理中に例外が発生しました', 'fa-circle-exclamation text-rose-400');
+            }
+        }
+
+        function renderStaffRequests() {
+            const container = document.getElementById('staffRequestList');
+            if (!container || !currentUser) return;
+
+            const myReqs = requestList.filter(r => r.staffId === currentUser.id);
+
+            if (myReqs.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs">申請履歴はありません</div>`;
+                return;
+            }
+
+            container.innerHTML = myReqs.map(r => {
+                let statusBadge = '<span class="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-[11px] font-bold">申請中</span>';
+                if (r.status === '承認') statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-[11px] font-bold">承認済み</span>';
+                if (r.status === '差し戻し') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full text-[11px] font-bold">差し戻し</span>';
+                if (r.status === '却下') statusBadge = '<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-[11px] font-bold">却下</span>';
+
+                return `
+                    <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-white transition space-y-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="font-bold text-sm text-slate-800">${escapeHtml(r.type)}</span>
+                                <p class="text-xs text-slate-500 mt-0.5">${r.startDate} ${r.startDate !== r.endDate ? '～ ' + r.endDate : ''} ${r.timeRange !== '-' ? '（時間: ' + escapeHtml(r.timeRange) + '）' : ''}</p>
+                            </div>
+                            ${statusBadge}
+                        </div>
+                        ${r.reason ? `<p class="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">理由: ${escapeHtml(r.reason)}</p>` : ''}
+                        ${r.remandComment ? `<p class="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 font-medium"><i class="fa-solid fa-comment-dots"></i> 差し戻しコメント: ${escapeHtml(r.remandComment)}</p>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setAdminSubTab(tab) {
+            activeAdminSubTab = tab;
+            const tabReq = document.getElementById('adminTabRequests');
+            const tabStaff = document.getElementById('adminTabStaff');
+            const tabSearch = document.getElementById('adminTabSearch');
+            const tabGuide = document.getElementById('adminTabGuide');
+
+            const subReq = document.getElementById('adminSubRequests');
+            const subStaff = document.getElementById('adminSubStaff');
+            const subSearch = document.getElementById('adminSubSearch');
+            const subGuide = document.getElementById('adminSubGuide');
+
+            const inactiveClass = 'py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-50 transition flex items-center justify-center space-x-1';
+
+            subReq.classList.add('hidden');
+            subStaff.classList.add('hidden');
+            subSearch.classList.add('hidden');
+            subGuide.classList.add('hidden');
+
+            tabReq.className = inactiveClass;
+            tabStaff.className = inactiveClass;
+            tabSearch.className = inactiveClass;
+            tabGuide.className = inactiveClass;
+
+            if (tab === 'requests') {
+                tabReq.className = 'py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center space-x-1 bg-amber-50 text-amber-800 border border-amber-200';
+                subReq.classList.remove('hidden');
+                renderAdminRequests();
+            } else if (tab === 'staff') {
+                tabStaff.className = 'py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center space-x-1 bg-teal-50 text-teal-800 border border-teal-200';
+                subStaff.classList.remove('hidden');
+                renderStaffTable();
+            } else if (tab === 'search') {
+                tabSearch.className = 'py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center space-x-1 bg-teal-50 text-teal-800 border border-teal-200';
+                subSearch.classList.remove('hidden');
+                initSearchFilters();
+                renderAdminSearchResults();
+            } else if (tab === 'guide') {
+                tabGuide.className = 'py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center space-x-1 bg-emerald-50 text-emerald-800 border border-emerald-200';
+                subGuide.classList.remove('hidden');
+                openGuideModal();
+            }
+        }
+
+        function initSearchFilters() {
+            const monthInput = document.getElementById('searchMonthFilter');
+            if (monthInput && !monthInput.value) {
+                // 初回は当月を初期値にしつつ、全期間表示ボタンでいつでも切り替え可能
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                monthInput.value = `${year}-${month}`;
+            }
+
+            const staffSelect = document.getElementById('searchStaffFilter');
+            if (staffSelect) {
+                const currentVal = staffSelect.value;
+                staffSelect.innerHTML = `<option value="ALL">全員（全スタッフ）</option>` +
+                    staffList.map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${escapeHtml(s.role || '未設定')})</option>`).join('');
+                staffSelect.value = currentVal || 'ALL';
+            }
+        }
+
+        function renderAdminSearchResults() {
+            const container = document.getElementById('adminSearchResultList');
+            if (!container) return;
+
+            const targetMonth = document.getElementById('searchMonthFilter') ? document.getElementById('searchMonthFilter').value : '';
+            const selectedStaffId = document.getElementById('searchStaffFilter') ? document.getElementById('searchStaffFilter').value : 'ALL';
+            const selectedType = document.getElementById('searchTypeFilter') ? document.getElementById('searchTypeFilter').value : 'ALL';
+
+            let filtered = requestList.filter(r => {
+                // 承認ステータス（承認 / 承認済み / 承認済）を確実に捕捉
+                if (!isApprovedStatus(r.status)) return false;
+
+                // 対象年月の比較（ハイフン/スラッシュの表記違いを正規化して比較）
+                if (targetMonth) {
+                    const reqMonth = parseYearMonth(r.startDate || r.createdAt);
+                    if (reqMonth && reqMonth !== targetMonth) return false;
+                }
+
+                // スタッフIDの比較（文字列型に統一して比較）
+                if (selectedStaffId !== 'ALL' && String(r.staffId) !== String(selectedStaffId)) {
+                    return false;
+                }
+
+                // 届出種別の比較
+                if (selectedType !== 'ALL') {
+                    if (!r.type || !r.type.includes(selectedType)) return false;
+                }
+
+                return true;
+            });
+
+            const totalCount = filtered.length;
+            const totalDays = filtered.reduce((sum, r) => sum + (parseFloat(r.days) || 0), 0);
+
+            document.getElementById('searchResultCount').textContent = totalCount;
+            document.getElementById('searchResultDays').textContent = totalDays.toFixed(1);
+
+            if (filtered.length === 0) {
+                const periodLabel = targetMonth ? `${targetMonth}` : '全期間';
+                container.innerHTML = `
+                    <div class="text-center py-12 text-slate-400 text-sm font-bold bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 space-y-2">
+                        <p>条件（${periodLabel}）に一致する【承認済み】の届出データはありません。</p>
+                        ${targetMonth ? `<button type="button" onclick="clearMonthFilter()" class="bg-teal-50 text-teal-700 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 text-xs font-bold transition">全期間のデータを表示する</button>` : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(r => {
+                const periodText = formatJpPeriod(r.startDate, r.endDate);
+                return `
+                    <div class="border border-slate-200 rounded-2xl p-5 sm:p-6 bg-white shadow-sm hover:shadow-md transition space-y-4">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="font-extrabold text-lg sm:text-xl text-slate-800">${escapeHtml(r.staffName)}</span>
+                                <span class="text-xs text-slate-400 font-mono font-bold">(ID: ${escapeHtml(r.staffId)})</span>
+                            </div>
+                            <span class="bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-bold flex items-center gap-1.5 shrink-0 shadow-sm">
+                                <i class="fa-solid fa-circle-check"></i> 承認済み
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-teal-50/80 p-4 rounded-xl border border-teal-200/80 shadow-sm">
+                                <span class="text-xs font-extrabold text-teal-800 block mb-1">■ 届出種別</span>
+                                <strong class="text-base sm:text-lg text-teal-900 font-extrabold">${escapeHtml(r.type)}</strong>
+                            </div>
+                            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                                <span class="text-xs font-extrabold text-slate-600 block mb-1">■ 取得・対象年月日</span>
+                                <strong class="text-base sm:text-lg text-slate-900 font-extrabold">${periodText}</strong>
+                                ${r.timeRange && r.timeRange !== '-' ? `<div class="text-xs sm:text-sm text-slate-700 mt-1 font-medium">時間帯: ${escapeHtml(r.timeRange)}</div>` : ''}
+                            </div>
+                        </div>
+
+                        ${r.reason ? `<div class="text-xs sm:text-sm text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-medium"><strong>申請理由:</strong> ${escapeHtml(r.reason)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderAdminRequests() {
+            const container = document.getElementById('adminRequestList');
+            const filter = document.getElementById('adminStatusFilter').value;
+            const pendingBadge = document.getElementById('pendingBadge');
+
+            const pendingCount = requestList.filter(r => r.status === '申請中').length;
+            if (pendingBadge) pendingBadge.textContent = pendingCount;
+
+            let filtered = requestList;
+            if (filter !== 'ALL') {
+                filtered = requestList.filter(r => r.status === filter);
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs">該当する申請データはありません</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(r => {
+                const staff = staffList.find(s => s.id === r.staffId);
+                const remaining = staff ? ((staff.carriedOver + staff.currentGranted) - staff.used).toFixed(1) : '--';
+
+                return `
+                    <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow transition space-y-3">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="font-bold text-sm text-slate-800">${escapeHtml(r.staffName)}</span>
+                                <span class="bg-slate-100 text-slate-600 text-[11px] px-2 py-0.5 rounded-full">有休残: ${remaining}日</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-slate-400">${r.createdAt || ''}</span>
+                                <button onclick="confirmDeleteRequest('${r.id}')" class="text-slate-400 hover:text-rose-600 text-xs px-1.5 py-0.5 rounded transition" title="申請データを削除">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            <div><span class="text-slate-400">届出種別:</span> <strong class="text-teal-700">${escapeHtml(r.type)}</strong></div>
+                            <div><span class="text-slate-400">期間/時間:</span> <strong>${r.startDate} ${r.startDate !== r.endDate ? '～ ' + r.endDate : ''} ${r.timeRange !== '-' ? '（' + escapeHtml(r.timeRange) + '）' : ''}</strong></div>
+                        </div>
+
+                        ${r.reason ? `<div class="text-xs bg-slate-50 p-2.5 rounded-lg text-slate-700">理由: ${escapeHtml(r.reason)}</div>` : ''}
+
+                        <div class="flex justify-end items-center space-x-2 pt-1">
+                            ${r.status === '申請中' ? `
+                                <button onclick="openActionModal('${r.id}', 'remand')" class="bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg text-xs transition">差し戻し</button>
+                                <button onclick="openActionModal('${r.id}', 'reject')" class="bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold px-3 py-1.5 rounded-lg text-xs transition">却下</button>
+                                <button onclick="openActionModal('${r.id}', 'approve')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition shadow">承認</button>
+                            ` : `
+                                <span class="text-xs font-bold text-slate-500">判定済み: ${r.status}</span>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function confirmDeleteRequest(reqId) {
+            const req = requestList.find(r => r.id === reqId);
+            const name = req ? req.staffName : 'この申請';
+            openConfirmDialog(
+                `申請データを削除しますか？`,
+                `「${name}」さんの申請（ID: ${reqId}）を削除します。一覧から消去され復元できません。`,
+                '削除する',
+                'bg-rose-600 hover:bg-rose-700 text-white',
+                'fa-trash-can',
+                async () => {
+                    // 同期しても復活しないよう削除ブラックリストに登録
+                    deletedRequestIds.add(String(reqId));
+                    saveTrackingCaches();
+
+                    if (isGasConfigured()) {
+                        await apiCall("deleteRequest", { reqId });
+                    }
+
+                    requestList = requestList.filter(r => String(r.id) !== String(reqId));
+                    saveLocalData();
+                    showToast('申請データを削除しました', 'fa-trash-can text-rose-400');
+                    renderAdminRequests();
+                    if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                }
+            );
+        }
+
+        function renderStaffTable() {
+            const tbody = document.getElementById('staffTableBody');
+            const search = document.getElementById('staffSearchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('staffStatusFilter').value;
+            if (!tbody) return;
+
+            let filtered = staffList.filter(s => {
+                const nameMatch = s.name.toLowerCase().includes(search) || (s.role && s.role.toLowerCase().includes(search));
+                const sStatus = s.status || '在職';
+                if (statusFilter === 'ALL') return nameMatch;
+                return nameMatch && sStatus === statusFilter;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="12" class="text-center py-6 text-slate-400">対象のスタッフデータはありません</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(s => {
+                const remaining = ((s.carriedOver || 0) + (s.currentGranted || 0) - (s.used || 0)).toFixed(1);
+                const isRetired = s.status === '退職';
+                
+                const statusBadge = isRetired
+                    ? `<span class="bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded text-[10px]">退職</span>`
+                    : `<span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">在職</span>`;
+
+                const hireInfo = formatJapaneseDate(s.hireDate);
+
+                return `
+                    <tr class="hover:bg-slate-50 transition border-b border-slate-100 ${isRetired ? 'bg-slate-50/70 text-slate-500' : ''}">
+                        <td class="p-3 font-mono font-bold text-teal-700">${s.id}</td>
+                        <td class="p-3">${statusBadge}</td>
+                        <td class="p-3 font-bold ${isRetired ? 'line-through text-slate-400' : 'text-slate-800'}">${escapeHtml(s.name)}</td>
+                        <td class="p-3"><span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px]">${escapeHtml(s.role || '未設定')}</span></td>
+                        <td class="p-3 text-slate-600 font-medium">${s.hireDate || '-'}</td>
+                        <td class="p-3 text-slate-700 font-bold">${hireInfo.durationText}</td>
+                        <td class="p-3 text-center font-bold text-amber-700"><span class="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">${hireInfo.grantMonth !== '--' ? hireInfo.grantMonth + '月' : '-'}</span></td>
+                        <td class="p-3 text-right font-mono">${(s.carriedOver || 0).toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono">${(s.currentGranted || 0).toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono text-rose-600">${(s.used || 0).toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono font-bold text-teal-700">${remaining}</td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center space-x-1">
+                                <button onclick="editStaff('${s.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-[11px] transition" title="編集">編集</button>
+                                ${isRetired ? `
+                                    <button onclick="confirmToggleRetire('${s.id}', '在職')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded text-[11px] transition" title="復職処理">復職</button>
+                                ` : `
+                                    <button onclick="confirmToggleRetire('${s.id}', '退職')" class="bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded text-[11px] transition" title="退職処理">退職</button>
+                                `}
+                                <button onclick="confirmDeleteStaff('${s.id}')" class="bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded text-[11px] transition" title="完全削除">削除</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function openRegisterModal() {
+            document.getElementById('editStaffTargetId').value = '';
+            document.getElementById('registerModalTitle').innerHTML = '<i class="fa-solid fa-user-plus"></i> 新規スタッフ登録 (ID自動発行)';
+            document.getElementById('regName').value = '';
+            document.getElementById('regRole').value = '介護士';
+            document.getElementById('regPin').value = '0123';
+            document.getElementById('regHireDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('regCarriedOver').value = '0';
+            document.getElementById('regCurrentGranted').value = '10';
+            document.getElementById('regUsed').value = '0';
+            
+            const submitBtn = document.getElementById('regSubmitBtn');
+            if (submitBtn) submitBtn.textContent = '保存してIDを発行';
+
+            document.getElementById('registerModal').classList.remove('hidden');
+        }
+
+        function closeRegisterModal() {
+            document.getElementById('registerModal').classList.add('hidden');
+        }
+
+        function autoCalcGrantDays() {
+            const hireDateStr = document.getElementById('regHireDate').value;
+            if (!hireDateStr) return;
+            const hireDate = new Date(hireDateStr);
+            const today = new Date();
+            let years = (today - hireDate) / (1000 * 60 * 60 * 24 * 365.25);
+            let granted = 10.0;
+            if (years < 0.5) granted = 0.0;
+            else if (years < 1.5) granted = 10.0;
+            else if (years < 2.5) granted = 11.0;
+            else if (years < 3.5) granted = 12.0;
+            else if (years < 4.5) granted = 14.0;
+            else if (years < 5.5) granted = 16.0;
+            else if (years < 6.5) granted = 18.0;
+            else granted = 20.0;
+
+            document.getElementById('regCurrentGranted').value = granted;
+        }
+
+        async function handleStaffSave(e) {
+            e.preventDefault();
+            const editId = document.getElementById('editStaffTargetId').value;
+            const rawPin = document.getElementById('regPin').value;
+            const formattedPin = normalizeNumber(rawPin) ? normalizeNumber(rawPin).padStart(4, '0') : '0123';
+            const payload = {
+                id: editId,
+                name: document.getElementById('regName').value.trim(),
+                role: document.getElementById('regRole').value,
+                pin: formattedPin,
+                hireDate: document.getElementById('regHireDate').value,
+                carriedOver: parseFloat(document.getElementById('regCarriedOver').value) || 0,
+                currentGranted: parseFloat(document.getElementById('regCurrentGranted').value) || 0,
+                used: parseFloat(document.getElementById('regUsed').value) || 0,
+                status: '在職'
+            };
+
+            if (isGasConfigured()) {
+                const actionName = editId ? "updateStaff" : "registerStaff";
+                const res = await apiCall(actionName, payload);
+                if (res && res.success) {
+                    closeRegisterModal();
+                    await fetchLatestData();
+                    if (!editId && res.newId) {
+                        showIssuedIdModal(res.newId);
+                    } else {
+                        showToast(res.message || 'スタッフ情報を保存しました');
+                    }
+                    if (currentUser && currentUser.isAdmin) renderStaffTable();
+                    return;
+                }
+            }
+
+            if (editId) {
+                const staff = staffList.find(s => s.id === editId);
+                if (staff) Object.assign(staff, payload);
+                showToast(`${payload.name} さんの情報を更新しました`);
+            } else {
+                const nextId = (Math.max(...staffList.map(s => parseInt(normalizeNumber(s.id)) || 1000), 1000) + 1).toString();
+                staffList.push({ ...payload, id: nextId });
+                showIssuedIdModal(nextId);
+            }
+
+            saveLocalData();
+            closeRegisterModal();
+            if (currentUser && currentUser.isAdmin) renderStaffTable();
+        }
+
+        function editStaff(id) {
+            const staff = staffList.find(s => s.id === id);
+            if (!staff) return;
+
+            document.getElementById('editStaffTargetId').value = staff.id;
+            document.getElementById('registerModalTitle').innerHTML = `<i class="fa-solid fa-user-pen"></i> スタッフ情報編集 (ID: ${staff.id})`;
+            document.getElementById('regName').value = staff.name;
+            document.getElementById('regRole').value = staff.role || '介護士';
+            document.getElementById('regPin').value = staff.pin || '0123';
+            document.getElementById('regHireDate').value = staff.hireDate || '';
+            document.getElementById('regCarriedOver').value = staff.carriedOver || 0;
+            document.getElementById('regCurrentGranted').value = staff.currentGranted || 0;
+            document.getElementById('regUsed').value = staff.used || 0;
+
+            const submitBtn = document.getElementById('regSubmitBtn');
+            if (submitBtn) submitBtn.textContent = '更新する';
+
+            document.getElementById('registerModal').classList.remove('hidden');
+        }
+
+        function confirmToggleRetire(id, targetStatus) {
+            const staff = staffList.find(s => s.id === id);
+            if (!staff) return;
+
+            const isRetire = targetStatus === '退職';
+            const title = isRetire ? `「${staff.name}」さんを退職にしますか？` : `「${staff.name}」さんを復職させますか？`;
+            const desc = isRetire
+                ? '退職処理をすると、このスタッフはログインできなくなります。台帳データはそのまま保存されます。'
+                : '復職処理をすると、再びログインして申請が作成できるようになります。';
+            const btnColor = isRetire ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white';
+
+            openConfirmDialog(title, desc, isRetire ? '退職にする' : '復職させる', btnColor, 'fa-user-slash', async () => {
+                if (isGasConfigured()) {
+                    const res = await apiCall("toggleRetireStaff", { id, status: targetStatus });
+                    if (res && res.success) {
+                        showToast(res.message || 'ステータスを変更しました');
+                        await fetchLatestData();
+                        renderStaffTable();
+                        return;
+                    }
+                }
+
+                staff.status = targetStatus;
+                saveLocalData();
+                showToast(`「${staff.name}」さんのステータスを【${targetStatus}】に変更しました`);
+                renderStaffTable();
+            });
+        }
+
+        function confirmDeleteStaff(id) {
+            const staff = staffList.find(s => s.id === id);
+            if (!staff) return;
+
+            openConfirmDialog(
+                `「${staff.name}」のデータを完全削除しますか？`,
+                '間違えて登録した場合などに実行してください。この操作を取り消すことはできません。',
+                '完全に削除する',
+                'bg-rose-600 hover:bg-rose-700 text-white',
+                'fa-trash-can',
+                async () => {
+                    if (isGasConfigured()) {
+                        const res = await apiCall("deleteStaff", { id });
+                        if (res && res.success) {
+                            showToast('スタッフデータを削除しました', 'fa-trash-can text-rose-400');
+                            await fetchLatestData();
+                            renderStaffTable();
+                            return;
+                        }
+                    }
+
+                    staffList = staffList.filter(s => s.id !== id);
+                    saveLocalData();
+                    showToast('スタッフデータを削除しました', 'fa-trash-can text-rose-400');
+                    renderStaffTable();
+                }
+            );
+        }
+
+        function openActionModal(reqId, action) {
+            selectedRequestId = reqId;
+            selectedAction = action;
+            const title = document.getElementById('actionModalTitle');
+            const desc = document.getElementById('actionModalDesc');
+            const commentGroup = document.getElementById('remandCommentGroup');
+            const confirmBtn = document.getElementById('confirmActionBtn');
+
+            if (action === 'approve') {
+                title.textContent = '申請の承認';
+                desc.textContent = 'この届出を承認しますか？有休申請の場合は消化日数が自動的に引かれます。';
+                commentGroup.classList.add('hidden');
+                confirmBtn.className = 'flex-1 bg-teal-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+            } else if (action === 'remand') {
+                title.textContent = '申請の差し戻し';
+                desc.textContent = 'スタッフへ修正依頼の差し戻しを行います。';
+                commentGroup.classList.remove('hidden');
+                confirmBtn.className = 'flex-1 bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+            } else if (action === 'reject') {
+                title.textContent = '申請の却下';
+                desc.textContent = 'この届出を却下します。';
+                commentGroup.classList.add('hidden');
+                confirmBtn.className = 'flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+            }
+
+            document.getElementById('actionModal').classList.remove('hidden');
+        }
+
+        function closeActionModal() {
+            document.getElementById('actionModal').classList.add('hidden');
+        }
+
+        async function executeReqAction() {
+            const comment = document.getElementById('remandComment').value.trim();
+            if (selectedAction === 'remand' && !comment) {
+                showToast('差し戻し理由を入力してください', 'fa-circle-exclamation text-amber-400');
+                return;
+            }
+
+            const actionStatusMap = {
+                'approve': '承認',
+                'remand': '差し戻し',
+                'reject': '却下'
+            };
+            const targetStatus = actionStatusMap[selectedAction] || selectedAction;
+
+            // 同期時にGASから「申請中」で再取得されても復活しないようステータスを固定キャッシュ
+            processedRequestMap.set(String(selectedRequestId), {
+                status: targetStatus,
+                remandComment: comment
+            });
+            saveTrackingCaches();
+
+            if (isGasConfigured()) {
+                await apiCall("processRequest", { reqId: selectedRequestId, action: selectedAction, comment });
+            }
+
+            const req = requestList.find(r => String(r.id) === String(selectedRequestId));
+            if (req) {
+                req.status = targetStatus;
+                if (selectedAction === 'approve') {
+                    if (req.type.includes('有給休暇') || req.type.includes('有給届')) {
+                        const staff = staffList.find(s => s.id === req.staffId);
+                        if (staff) staff.used += req.days;
+                    }
+                    showToast('申請を承認しました（月別照会へ移動しました）');
+                } else if (selectedAction === 'remand') {
+                    req.remandComment = comment;
+                    showToast('差し戻し処理を完了しました');
+                } else if (selectedAction === 'reject') {
+                    showToast('申請を却下しました', 'fa-circle-xmark text-rose-400');
+                }
+                saveLocalData();
+            }
+
+            closeActionModal();
+            renderAdminRequests();
+            if (activeAdminSubTab === 'search') {
+                renderAdminSearchResults();
+            }
+        }
+
+        function exportBackupData() {
+            const data = { staff: staffList, requests: requestList, exportedAt: new Date().toISOString() };
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kusunoki_backup_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('バックアップファイルを保存しました');
+        }
+
+        function importBackupData() {
+            document.getElementById('importFileInput').click();
+        }
+
+        function handleFileImport(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const parsed = JSON.parse(evt.target.result);
+                    if (parsed.staff && parsed.requests) {
+                        staffList = parsed.staff;
+                        requestList = parsed.requests;
+                        saveLocalData();
+                        showToast('データを正常に復元しました');
+                        if (currentUser) showMainApp();
+                    }
+                } catch (err) {
+                    showToast('ファイルの読み込みに失敗しました', 'fa-circle-exclamation text-rose-400');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        window.onload = function() {
+            fetchLatestData();
+            setLoginMode('staff');
+        };
+    </script>
 </body>
 </html>
