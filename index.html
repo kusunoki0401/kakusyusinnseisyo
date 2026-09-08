@@ -1340,10 +1340,25 @@
                 const res = await apiCall("getAllData", {}, 15000);
                 if (res && res.success) {
                     staffList = res.staffList || [];
-                    requestList = (res.requestList || []).map(r => ({
+                    const remoteReqs = (res.requestList || []).map(r => ({
                         ...r,
                         status: normalizeStatus(r.status)
                     }));
+                    const remoteIds = new Set(remoteReqs.map(r => String(r.id)));
+
+                    // オフライン時にローカルのみで作成された未同期データの保護＆自動同期
+                    const localUnsynced = requestList.filter(r => r && r.id && !remoteIds.has(String(r.id)));
+
+                    // 未同期データをGASへ自動リトライ送信
+                    localUnsynced.forEach(async (req) => {
+                        try {
+                            await apiCall("submitRequest", req);
+                        } catch(e) {}
+                    });
+
+                    // リモートデータとローカル未同期データを統合
+                    requestList = [...localUnsynced, ...remoteReqs];
+
                     saveLocalData();
                     updateSyncBadge('online');
                     if (currentUser) {
