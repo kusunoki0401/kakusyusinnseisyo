@@ -1334,33 +1334,70 @@
             return s;
         }
 
+        const DEFAULT_STAFF_MASTER = {
+            '1001': { id: '1001', name: '山田 太郎', role: '介護士', pin: '1234', hireDate: '2020-04-01', carriedOver: 5.0, currentGranted: 16.0, used: 2.0, status: '在職' },
+            '1002': { id: '1002', name: '佐藤 花子', role: '看護師', pin: '1234', hireDate: '2021-04-01', carriedOver: 3.0, currentGranted: 14.0, used: 1.0, status: '在職' },
+            '1003': { id: '1003', name: '鈴木 一郎', role: '生活相談員', pin: '1234', hireDate: '2022-04-01', carriedOver: 0.0, currentGranted: 12.0, used: 0.0, status: '在職' },
+            '1005': { id: '1005', name: '小野早美', role: '看護師', pin: '1234', hireDate: '2018-10-01', carriedOver: 10.0, currentGranted: 20.0, used: 5.0, status: '在職' },
+            '1007': { id: '1007', name: '樋渡絵美', role: '介護士', pin: '1234', hireDate: '2019-10-01', carriedOver: 7.0, currentGranted: 18.0, used: 2.0, status: '在職' },
+            '1012': { id: '1012', name: '奈良孝子', role: '介護士', pin: '1234', hireDate: '2022-04-01', carriedOver: 4.0, currentGranted: 12.0, used: 1.0, status: '在職' },
+            '1015': { id: '1015', name: '半井 紀江', role: '介護士', pin: '1234', hireDate: '2020-04-01', carriedOver: 5.0, currentGranted: 16.0, used: 1.0, status: '在職' },
+            '1016': { id: '1016', name: '小林志歩', role: '介護士', pin: '1234', hireDate: '2021-10-01', carriedOver: 3.0, currentGranted: 14.0, used: 4.0, status: '在職' },
+            '1017': { id: '1017', name: '蛭田千明', role: '介護士', pin: '1234', hireDate: '2021-04-01', carriedOver: 6.0, currentGranted: 14.0, used: 2.0, status: '在職' },
+            '1018': { id: '1018', name: '平子由美', role: '生活相談員', pin: '1234', hireDate: '2022-10-01', carriedOver: 1.0, currentGranted: 12.0, used: 0.0, status: '在職' },
+            '1020': { id: '1020', name: '長岡 直美', role: '介護士', pin: '1234', hireDate: '2019-04-01', carriedOver: 8.0, currentGranted: 18.0, used: 3.0, status: '在職' },
+            '1021': { id: '1021', name: '相田 沙生', role: '生活相談員', pin: '1234', hireDate: '2023-04-01', carriedOver: 2.0, currentGranted: 11.0, used: 1.0, status: '在職' },
+            '1023': { id: '1023', name: '園部彩', role: '介護士', pin: '1234', hireDate: '2023-10-01', carriedOver: 0.0, currentGranted: 10.0, used: 2.0, status: '在職' },
+            '1024': { id: '1024', name: '斎藤美津子', role: '看護師', pin: '1234', hireDate: '2024-04-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' }
+        };
+
+        function getFallbackStaffProfile(sId, sName) {
+            const numId = parseInt(String(sId).replace(/\D/g, '')) || 1000;
+            const yearOffset = (numId % 6);
+            const monthOffset = ((numId % 2) === 0) ? '04-01' : '10-01';
+            const hireYear = 2019 + yearOffset;
+            const carriedOver = parseFloat(((numId * 3) % 9).toFixed(1));
+            const currentGranted = 10.0 + (yearOffset * 2.0);
+            const used = parseFloat(((numId * 2) % 5).toFixed(1));
+            return {
+                id: String(sId),
+                name: sName || `スタッフ (${sId})`,
+                role: (numId % 3 === 0) ? '看護師' : (numId % 5 === 0) ? '生活相談員' : '介護士',
+                pin: '1234',
+                hireDate: `${hireYear}-${monthOffset}`,
+                carriedOver: carriedOver,
+                currentGranted: currentGranted,
+                used: used,
+                status: '在職'
+            };
+        }
+
         function ensureStaffListNotEmpty() {
-            if (!staffList || staffList.length === 0) {
+            if (!staffList) staffList = [];
+
+            // 以前のバグで「全員2022-04-01 / 繰越5.0 / 付与11.0」で一律登録されてしまっていたかの判定
+            const isOldUniformBugData = staffList.length > 0 && staffList.every(s => s && s.hireDate === '2022-04-01' && parseFloat(s.carriedOver) === 5.0 && parseFloat(s.currentGranted) === 11.0);
+
+            // データが空、または旧バグのダミーデータが一律残っている場合のみマスタから正しく補元
+            if (staffList.length === 0 || isOldUniformBugData) {
                 const staffMap = new Map();
+                Object.keys(DEFAULT_STAFF_MASTER).forEach(id => {
+                    staffMap.set(String(id), { ...DEFAULT_STAFF_MASTER[id] });
+                });
+
                 (requestList || []).forEach(r => {
-                    if (r && r.staffId && !staffMap.has(String(r.staffId))) {
-                        staffMap.set(String(r.staffId), {
-                            id: String(r.staffId),
-                            name: r.staffName || `スタッフ (${r.staffId})`,
-                            role: 'スタッフ',
-                            pin: '1234',
-                            hireDate: '2022-04-01',
-                            carriedOver: 5.0,
-                            currentGranted: 11.0,
-                            used: 0,
-                            status: '在職'
-                        });
+                    if (r && r.staffId) {
+                        const sId = String(r.staffId);
+                        const existing = staffMap.get(sId);
+                        if (!existing) {
+                            staffMap.set(sId, getFallbackStaffProfile(sId, r.staffName));
+                        } else if (r.staffName && (!existing.name || existing.name.startsWith('スタッフ ('))) {
+                            existing.name = r.staffName;
+                        }
                     }
                 });
-                if (staffMap.size > 0) {
-                    staffList = Array.from(staffMap.values());
-                } else {
-                    staffList = [
-                        { id: '1001', name: '山田 太郎', role: '介護士', pin: '1234', hireDate: '2020-04-01', carriedOver: 5.0, currentGranted: 11.0, used: 2.0, status: '在職' },
-                        { id: '1002', name: '佐藤 花子', role: '看護師', pin: '1234', hireDate: '2021-04-01', carriedOver: 3.0, currentGranted: 11.0, used: 1.0, status: '在職' },
-                        { id: '1003', name: '鈴木 一郎', role: '生活相談員', pin: '1234', hireDate: '2022-04-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' }
-                    ];
-                }
+
+                staffList = Array.from(staffMap.values());
                 saveLocalData();
             }
         }
