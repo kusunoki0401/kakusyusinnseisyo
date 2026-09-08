@@ -1334,15 +1334,52 @@
             return s;
         }
 
+        function ensureStaffListNotEmpty() {
+            if (!staffList || staffList.length === 0) {
+                const staffMap = new Map();
+                (requestList || []).forEach(r => {
+                    if (r && r.staffId && !staffMap.has(String(r.staffId))) {
+                        staffMap.set(String(r.staffId), {
+                            id: String(r.staffId),
+                            name: r.staffName || `スタッフ (${r.staffId})`,
+                            role: 'スタッフ',
+                            pin: '1234',
+                            hireDate: '2022-04-01',
+                            carriedOver: 5.0,
+                            currentGranted: 11.0,
+                            used: 0,
+                            status: '在職'
+                        });
+                    }
+                });
+                if (staffMap.size > 0) {
+                    staffList = Array.from(staffMap.values());
+                } else {
+                    staffList = [
+                        { id: '1001', name: '山田 太郎', role: '介護士', pin: '1234', hireDate: '2020-04-01', carriedOver: 5.0, currentGranted: 11.0, used: 2.0, status: '在職' },
+                        { id: '1002', name: '佐藤 花子', role: '看護師', pin: '1234', hireDate: '2021-04-01', carriedOver: 3.0, currentGranted: 11.0, used: 1.0, status: '在職' },
+                        { id: '1003', name: '鈴木 一郎', role: '生活相談員', pin: '1234', hireDate: '2022-04-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' }
+                    ];
+                }
+                saveLocalData();
+            }
+        }
+
         async function fetchLatestData() {
             if (isGasConfigured()) {
                 updateSyncBadge('syncing', '同期確認中...');
                 const res = await apiCall("getAllData", {}, 15000);
                 if (res && res.success) {
-                    staffList = (res.staffList || []).map(s => ({
-                        ...s,
-                        hireDate: s.hireDate || s.joinedDate || ''
-                    }));
+                    if (res.staffList && res.staffList.length > 0) {
+                        staffList = res.staffList.map(s => ({
+                            ...s,
+                            hireDate: s.hireDate || s.joinedDate || ''
+                        }));
+                    } else if (!staffList || staffList.length === 0) {
+                        loadLocalData();
+                        ensureStaffListNotEmpty();
+                    }
+
                     const remoteReqs = (res.requestList || []).map(r => ({
                         ...r,
                         status: normalizeStatus(r.status)
@@ -1362,6 +1399,7 @@
                     // リモートデータとローカル未同期データを統合
                     requestList = [...localUnsynced, ...remoteReqs];
 
+                    ensureStaffListNotEmpty();
                     saveLocalData();
                     updateSyncBadge('online');
                     if (currentUser) {
@@ -1379,8 +1417,19 @@
             }
             if (!staffList || staffList.length === 0) {
                 loadLocalData();
+                ensureStaffListNotEmpty();
             }
             updateSyncBadge('offline', 'ローカル保持中 (GAS通信未接続)');
+            if (currentUser) {
+                if (currentUser.isAdmin) {
+                    if (activeAdminSubTab === 'requests') renderAdminRequests();
+                    else if (activeAdminSubTab === 'staff') renderStaffTable();
+                    else if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                } else {
+                    refreshStaffCard();
+                    renderStaffRequests();
+                }
+            }
         }
 
         function updateSyncBadge(status, text) {
@@ -1412,6 +1461,7 @@
                 staffList = [];
                 requestList = [];
             }
+            ensureStaffListNotEmpty();
         }
 
         function saveLocalData() {
