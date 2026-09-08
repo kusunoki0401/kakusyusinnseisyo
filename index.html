@@ -1767,7 +1767,9 @@
                 }
             }
 
-            const payload = {
+            const reqId = 'REQ-' + Date.now().toString().slice(-5);
+            const newReq = {
+                id: reqId,
                 staffId: currentUser.id,
                 staffName: currentUser.name,
                 type: finalType,
@@ -1775,38 +1777,36 @@
                 endDate,
                 timeRange,
                 days,
-                reason
+                reason,
+                status: '申請中',
+                remandComment: '',
+                createdAt: new Date().toISOString()
             };
 
             try {
-                if (isGasConfigured()) {
-                    const res = await apiCall("submitRequest", payload);
-                    restoreSubmitBtn();
-                    if (res && res.success) {
-                        document.getElementById('reqReason').value = '';
-                        showSentNoticeModal(payload);
-                        await fetchLatestData();
-                        renderStaffRequests();
-                        return;
-                    } else {
-                        showToast('送信エラーが発生しました', 'fa-circle-exclamation text-amber-400');
-                        return;
-                    }
-                }
-
-                const newReq = {
-                    id: 'REQ-' + Date.now().toString().slice(-5),
-                    ...payload,
-                    status: '申請中',
-                    remandComment: '',
-                    createdAt: new Date().toISOString()
-                };
+                // 1. ローカルへ即時保存＆表示（申請の損失・エラー画面によるブロックを完全に回避）
                 requestList.unshift(newReq);
                 saveLocalData();
+
                 document.getElementById('reqReason').value = '';
                 restoreSubmitBtn();
-                showSentNoticeModal(payload);
+                showSentNoticeModal(newReq);
                 renderStaffRequests();
+
+                // 2. バックグラウンドでGASサーバーと同期送信
+                if (isGasConfigured()) {
+                    apiCall("submitRequest", newReq).then(res => {
+                        if (res && res.success) {
+                            fetchLatestData().then(() => {
+                                renderStaffRequests();
+                            });
+                        } else {
+                            console.warn("GAS Sync Warning:", res ? res.message : "No response from GAS");
+                        }
+                    }).catch(err => {
+                        console.warn("GAS Sync Exception:", err);
+                    });
+                }
             } catch (err) {
                 restoreSubmitBtn();
                 showToast('送信処理中に例外が発生しました', 'fa-circle-exclamation text-rose-400');
