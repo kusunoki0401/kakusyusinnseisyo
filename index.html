@@ -688,10 +688,17 @@
                 </h3>
                 <button type="button" onclick="closeAdminLoginModal()" class="text-teal-200 hover:text-white text-2xl font-bold">&times;</button>
             </div>
-            <form onsubmit="handleAdminLoginModalSubmit(event)" class="p-6 space-y-4">
+            <form onsubmit="handleAdminLoginModalSubmit(event)" autocomplete="off" class="p-6 space-y-4">
+                <!-- Dummy decoy inputs to prevent browser autofill -->
+                <input type="text" name="fake_admin_user" style="display:none" tabindex="-1" autocomplete="off" />
+                <input type="password" name="fake_admin_pass" style="display:none" tabindex="-1" autocomplete="off" />
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">管理者暗証番号 (6桁)</label>
-                    <input type="password" id="modalAdminPin" placeholder="暗証番号を入力" maxlength="6" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-xl tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                    <input type="text" id="modalAdminPin" name="kusunoki_admin_login_code" placeholder="暗証番号を入力 (6桁)" maxlength="6" required
+                        autocomplete="off" aria-autocomplete="none" data-lpignore="true" data-form-type="other"
+                        style="-webkit-text-security: disc; text-security: disc;" inputmode="numeric"
+                        readonly onfocus="this.removeAttribute('readonly');" onclick="this.removeAttribute('readonly');"
+                        class="w-full border border-slate-300 rounded-xl p-3 text-center text-xl tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
                 </div>
                 <div id="modalAdminLoginError" class="hidden bg-red-50 text-red-600 p-3 rounded-xl text-xs border border-red-200 flex items-center gap-2">
                     <i class="fa-solid fa-circle-exclamation shrink-0"></i>
@@ -718,7 +725,10 @@
             <form onsubmit="handleAdminPinChangeSubmit(event)" class="p-6 space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">現在の暗証番号 (6桁)</label>
-                    <input type="password" id="adminCurrentPin" maxlength="6" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                    <input type="password" id="adminCurrentPin" maxlength="6" required
+                        autocomplete="new-password" aria-autocomplete="none" data-lpignore="true"
+                        readonly onfocus="this.removeAttribute('readonly');" onclick="this.removeAttribute('readonly');"
+                        class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">新しい暗証番号 (6桁)</label>
@@ -1102,9 +1112,22 @@
         }
 
         function openAdminLoginModal() {
-            document.getElementById('modalAdminPin').value = '';
-            document.getElementById('modalAdminLoginError').classList.add('hidden');
+            const pinField = document.getElementById('modalAdminPin');
+            if (pinField) {
+                pinField.value = '';
+                pinField.setAttribute('readonly', 'readonly');
+            }
+            const errBox = document.getElementById('modalAdminLoginError');
+            if (errBox) errBox.classList.add('hidden');
             document.getElementById('adminLoginModal').classList.remove('hidden');
+
+            setTimeout(() => { if (pinField) pinField.value = ''; }, 30);
+            setTimeout(() => {
+                if (pinField) {
+                    pinField.value = '';
+                    pinField.removeAttribute('readonly');
+                }
+            }, 150);
         }
 
         function closeAdminLoginModal() {
@@ -1238,6 +1261,10 @@
 
             // 147123 または保存済みPINとの高速ローカル認証（GASの待機時間を挟まず即座にログイン）
             let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
+            if (savedAdminPin === '123456' || savedAdminPin === '1234') {
+                savedAdminPin = '147123';
+                localStorage.removeItem('kusunoki_admin_pin');
+            }
             if (pinInput === savedAdminPin || pinInput === '147123') {
                 currentUser = { id: 'admin', name: '管理者', role: '管理者', isAdmin: true };
                 if (errBox) errBox.classList.add('hidden');
@@ -1531,6 +1558,10 @@
             if (idInput === 'admin' || idInput === 'kanri') {
                 resetBtnState();
                 let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
+                if (savedAdminPin === '123456' || savedAdminPin === '1234') {
+                    savedAdminPin = '147123';
+                    localStorage.removeItem('kusunoki_admin_pin');
+                }
                 if (pinInput === savedAdminPin || pinInput === '147123') {
                     currentUser = { id: 'admin', name: '管理者', role: '管理者', isAdmin: true };
                     if (errorBox) errorBox.classList.add('hidden');
