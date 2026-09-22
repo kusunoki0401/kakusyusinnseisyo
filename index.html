@@ -206,10 +206,15 @@
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- 新規申請フォーム -->
                     <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <i class="fa-solid fa-pen-to-square text-teal-600"></i>
-                            <span>新規申請の作成</span>
-                        </h3>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 id="formTitle" class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <i id="formTitleIcon" class="fa-solid fa-pen-to-square text-teal-600"></i>
+                                <span id="formTitleText">新規申請の作成</span>
+                            </h3>
+                            <button type="button" id="cancelEditBtn" onclick="cancelEditRequest()" class="hidden text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg transition font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-xmark"></i> 編集をやめる
+                            </button>
+                        </div>
 
                         <form id="requestForm" onsubmit="handleRequestSubmit(event)" class="space-y-4">
                             <div>
@@ -278,7 +283,7 @@
                                     </div>
                                 </div>
 
-                                <div>
+                                <div id="breakTypeArea">
                                     <span class="text-[10px] font-bold text-slate-600 block mb-1">休憩の有無</span>
                                     <div class="grid grid-cols-2 gap-2">
                                         <label class="border border-slate-300 bg-white rounded-lg p-2 flex items-center space-x-2 text-xs font-medium cursor-pointer hover:bg-slate-50">
@@ -314,10 +319,23 @@
                                 <textarea id="reqReason" rows="3" placeholder="理由を入力してください（私用、通院等）" class="w-full border border-slate-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-teal-500"></textarea>
                             </div>
 
-                            <button type="submit" id="submitReqBtn" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm flex items-center justify-center space-x-2">
-                                <i class="fa-solid fa-paper-plane"></i>
-                                <span>事務所へ申請を送信</span>
-                            </button>
+                            <div id="editNoticeBanner" class="hidden p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium flex items-center gap-2">
+                                <i class="fa-solid fa-pen text-amber-600"></i>
+                                <span>申請内容の編集モードです。内容を修正して下のボタンで再送信してください。</span>
+                            </div>
+
+                            <input type="hidden" id="editingReqId" value="">
+
+                            <div class="flex gap-2">
+                                <button type="button" id="cancelEditBtnBottom" onclick="cancelEditRequest()" class="hidden w-1/3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3.5 rounded-xl transition text-sm flex items-center justify-center space-x-1">
+                                    <i class="fa-solid fa-xmark"></i>
+                                    <span>キャンセル</span>
+                                </button>
+                                <button type="submit" id="submitReqBtn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm flex items-center justify-center space-x-2">
+                                    <i id="submitReqBtnIcon" class="fa-solid fa-paper-plane"></i>
+                                    <span id="submitReqBtnText">事務所へ申請を送信</span>
+                                </button>
+                            </div>
                         </form>
                     </div>
 
@@ -1703,12 +1721,14 @@
             const halfGroup = document.getElementById('halfDayOptionGroup');
             const timeRangeGroup = document.getElementById('timeRangeOptionGroup');
             const regularTimeArea = document.getElementById('regularTimeArea');
+            const breakTypeArea = document.getElementById('breakTypeArea');
             const sectionTitle = document.getElementById('timeRangeSectionTitle');
             const targetTimeLabel = document.getElementById('targetTimeLabel');
 
             halfGroup.classList.add('hidden');
             timeRangeGroup.classList.add('hidden');
             regularTimeArea.classList.add('hidden');
+            if (breakTypeArea) breakTypeArea.classList.remove('hidden');
 
             if (type === '有給届') {
                 halfGroup.classList.remove('hidden');
@@ -1716,9 +1736,11 @@
                 timeRangeGroup.classList.remove('hidden');
 
                 if (['残業申請書', '早出申請書'].includes(type)) {
-                    sectionTitle.textContent = '申請時間・定時勤務・休憩設定';
+                    sectionTitle.textContent = '申請時間・定時勤務設定';
                     targetTimeLabel.textContent = type === '残業申請書' ? '① 残業時間（開始 ～ 終了）' : '① 早出時間（開始 ～ 終了）';
                     regularTimeArea.classList.remove('hidden');
+                    // 残業申請および早出申請では「休憩の有無」を非表示にする
+                    if (breakTypeArea) breakTypeArea.classList.add('hidden');
                 } else if (type === '休日出勤届') {
                     sectionTitle.textContent = '休日出勤時間・休憩設定';
                     targetTimeLabel.textContent = '出勤した時間（開始 ～ 終了）';
@@ -1760,20 +1782,166 @@
             return 0;
         }
 
+        let editingRequestId = null;
+
+        function startEditRequest(reqId) {
+            const req = requestList.find(r => String(r.id) === String(reqId));
+            if (!req) {
+                showToast('該当の申請が見つかりませんでした', 'fa-circle-exclamation text-rose-400');
+                return;
+            }
+            if (req.status !== '申請中' && req.status !== '差し戻し') {
+                showToast('審査中または処理完了済みの申請は編集できません', 'fa-circle-exclamation text-amber-400');
+                return;
+            }
+
+            editingRequestId = String(req.id);
+            document.getElementById('editingReqId').value = editingRequestId;
+
+            // 種別と半休の解析
+            let mainType = req.type || '有給届';
+            let halfVal = '全休';
+            if (mainType.startsWith('有給届')) {
+                if (mainType.includes('午前半休')) halfVal = '午前半休';
+                else if (mainType.includes('午後半休')) halfVal = '午後半休';
+                mainType = '有給届';
+            }
+
+            const reqTypeSelect = document.getElementById('reqType');
+            if (reqTypeSelect) {
+                reqTypeSelect.value = mainType;
+                handleReqTypeChange();
+            }
+
+            if (mainType === '有給届') {
+                const radio = document.querySelector(`input[name="halfDayType"][value="${halfVal}"]`);
+                if (radio) radio.checked = true;
+            }
+
+            // 日付の正規化 (YYYY-MM-DD)
+            const parseDateToYmd = (dStr) => {
+                if (!dStr) return '';
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
+                const m = String(dStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+                const d = new Date(dStr);
+                if (!isNaN(d.getTime())) {
+                    const y = d.getFullYear();
+                    const mn = String(d.getMonth() + 1).padStart(2, '0');
+                    const dy = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${mn}-${dy}`;
+                }
+                return '';
+            };
+
+            const sDate = parseDateToYmd(req.startDate);
+            const eDate = parseDateToYmd(req.endDate || req.startDate);
+            if (sDate) document.getElementById('reqStartDate').value = sDate;
+            if (eDate) document.getElementById('reqEndDate').value = eDate;
+
+            // 時間の解析
+            if (req.timeRange && req.timeRange !== '-') {
+                const tStr = req.timeRange;
+                let startTime = '09:00';
+                let endTime = '18:00';
+                let regStartTime = '09:00';
+                let regEndTime = '18:00';
+                let breakVal = tStr.includes('休憩あり') ? '休憩あり' : '休憩なし';
+
+                const regMatch = tStr.match(/定時:\s*(\d{1,2}:\d{2})\s*～\s*(\d{1,2}:\d{2})/);
+                if (regMatch) {
+                    regStartTime = regMatch[1];
+                    regEndTime = regMatch[2];
+                }
+
+                const targetMatch = tStr.match(/(?:対象:\s*|出勤時間:\s*|^)?(\d{1,2}:\d{2})\s*～\s*(\d{1,2}:\d{2})/);
+                if (targetMatch) {
+                    startTime = targetMatch[1];
+                    endTime = targetMatch[2];
+                }
+
+                const stEl = document.getElementById('reqStartTime');
+                const etEl = document.getElementById('reqEndTime');
+                const rstEl = document.getElementById('reqRegStartTime');
+                const retEl = document.getElementById('reqRegEndTime');
+                if (stEl) stEl.value = startTime;
+                if (etEl) etEl.value = endTime;
+                if (rstEl) rstEl.value = regStartTime;
+                if (retEl) retEl.value = regEndTime;
+
+                const breakRadio = document.querySelector(`input[name="reqBreakType"][value="${breakVal}"]`);
+                if (breakRadio) breakRadio.checked = true;
+            }
+
+            // 理由
+            document.getElementById('reqReason').value = req.reason || '';
+
+            calculateReqDays();
+
+            // UIを編集モードに切り替え
+            document.getElementById('formTitleText').textContent = '申請内容の編集';
+            document.getElementById('formTitleIcon').className = 'fa-solid fa-pen text-amber-600';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+            document.getElementById('cancelEditBtnBottom').classList.remove('hidden');
+            document.getElementById('editNoticeBanner').classList.remove('hidden');
+
+            const submitBtn = document.getElementById('submitReqBtn');
+            submitBtn.className = 'flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm flex items-center justify-center space-x-2';
+            document.getElementById('submitReqBtnIcon').className = 'fa-solid fa-check';
+            document.getElementById('submitReqBtnText').textContent = '変更内容を更新・再送信';
+
+            // フォームへスムーズにスクロール
+            const formContainer = document.getElementById('requestForm');
+            if (formContainer) {
+                formContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            showToast('申請内容を編集フォームに読み込みました', 'fa-pen text-amber-400');
+        }
+
+        function cancelEditRequest() {
+            editingRequestId = null;
+            document.getElementById('editingReqId').value = '';
+
+            // フォーム初期化
+            document.getElementById('reqType').value = '有給届';
+            handleReqTypeChange();
+
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('reqStartDate').value = today;
+            document.getElementById('reqEndDate').value = today;
+            document.getElementById('reqReason').value = '';
+            calculateReqDays();
+
+            // UIを新規申請モードに戻す
+            document.getElementById('formTitleText').textContent = '新規申請の作成';
+            document.getElementById('formTitleIcon').className = 'fa-solid fa-pen-to-square text-teal-600';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            document.getElementById('cancelEditBtnBottom').classList.add('hidden');
+            document.getElementById('editNoticeBanner').classList.add('hidden');
+
+            const submitBtn = document.getElementById('submitReqBtn');
+            submitBtn.className = 'flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm flex items-center justify-center space-x-2';
+            document.getElementById('submitReqBtnIcon').className = 'fa-solid fa-paper-plane';
+            document.getElementById('submitReqBtnText').textContent = '事務所へ申請を送信';
+        }
+
         async function handleRequestSubmit(e) {
             e.preventDefault();
             if (!currentUser) return;
 
             const submitBtn = document.getElementById('submitReqBtn');
-            const originalBtnContent = submitBtn.innerHTML;
+            const submitBtnTextEl = document.getElementById('submitReqBtnText');
+            const isEditing = Boolean(editingRequestId);
+            const originalText = submitBtnTextEl ? submitBtnTextEl.textContent : '送信中...';
 
             submitBtn.disabled = true;
-            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>送信中...</span>`;
+            if (submitBtnTextEl) submitBtnTextEl.textContent = isEditing ? '更新中...' : '送信中...';
             submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
 
             const restoreSubmitBtn = () => {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = originalBtnContent;
+                if (submitBtnTextEl) submitBtnTextEl.textContent = originalText;
                 submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
             };
 
@@ -1799,7 +1967,7 @@
                 if (['残業申請書', '早出申請書'].includes(type)) {
                     const regStart = document.getElementById('reqRegStartTime').value;
                     const regEnd = document.getElementById('reqRegEndTime').value;
-                    timeRange = `対象: ${startTime} ～ ${endTime} / 定時: ${regStart} ～ ${regEnd}（${breakVal}）`;
+                    timeRange = `対象: ${startTime} ～ ${endTime} / 定時: ${regStart} ～ ${regEnd}`;
                 } else if (type === '休日出勤届') {
                     timeRange = `出勤時間: ${startTime} ～ ${endTime}（${breakVal}）`;
                 } else {
@@ -1819,6 +1987,48 @@
             };
 
             try {
+                if (isEditing) {
+                    const targetReqId = editingRequestId;
+                    payload.id = targetReqId;
+
+                    if (isGasConfigured()) {
+                        // GAS側は既存行を削除して新しい内容で再登録することで整合性を維持
+                        await apiCall("deleteRequest", { id: targetReqId, reqId: targetReqId });
+                        const res = await apiCall("submitRequest", payload);
+                        restoreSubmitBtn();
+                        if (res && res.success) {
+                            cancelEditRequest();
+                            showSentNoticeModal({ ...payload, isUpdate: true });
+                            await fetchLatestData();
+                            renderStaffRequests();
+                            showToast('申請内容を更新しました', 'fa-circle-check text-emerald-400');
+                            return;
+                        } else {
+                            showToast('更新エラーが発生しました', 'fa-circle-exclamation text-amber-400');
+                            return;
+                        }
+                    }
+
+                    // ローカル保持モード
+                    const reqIdx = requestList.findIndex(r => String(r.id) === String(targetReqId));
+                    if (reqIdx !== -1) {
+                        requestList[reqIdx] = {
+                            ...requestList[reqIdx],
+                            ...payload,
+                            status: '申請中',
+                            remandComment: ''
+                        };
+                    }
+                    saveLocalData();
+                    cancelEditRequest();
+                    restoreSubmitBtn();
+                    showSentNoticeModal({ ...payload, isUpdate: true });
+                    renderStaffRequests();
+                    showToast('申請内容を更新しました', 'fa-circle-check text-emerald-400');
+                    return;
+                }
+
+                // 通常の新規申請処理
                 if (isGasConfigured()) {
                     const res = await apiCall("submitRequest", payload);
                     restoreSubmitBtn();
@@ -1857,7 +2067,7 @@
             const container = document.getElementById('staffRequestList');
             if (!container || !currentUser) return;
 
-            const myReqs = requestList.filter(r => r.staffId === currentUser.id);
+            const myReqs = requestList.filter(r => String(r.staffId) === String(currentUser.id));
 
             if (myReqs.length === 0) {
                 container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs">申請履歴はありません</div>`;
@@ -1870,6 +2080,9 @@
                 if (r.status === '差し戻し') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full text-[11px] font-bold">差し戻し</span>';
                 if (r.status === '却下') statusBadge = '<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-[11px] font-bold">却下</span>';
 
+                // 承認前（申請中 または 差し戻し）の場合に編集ボタンを表示
+                const canEdit = (r.status === '申請中' || r.status === '差し戻し');
+
                 return `
                     <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-white transition space-y-2">
                         <div class="flex justify-between items-start">
@@ -1877,7 +2090,14 @@
                                 <span class="font-bold text-sm text-slate-800">${escapeHtml(r.type)}</span>
                                 <p class="text-xs text-slate-500 mt-0.5">${r.startDate} ${r.startDate !== r.endDate ? '～ ' + r.endDate : ''} ${r.timeRange !== '-' ? '（時間: ' + escapeHtml(r.timeRange) + '）' : ''}</p>
                             </div>
-                            ${statusBadge}
+                            <div class="flex items-center gap-2">
+                                ${statusBadge}
+                                ${canEdit ? `
+                                    <button onclick="startEditRequest('${r.id}')" class="bg-white hover:bg-teal-50 text-teal-700 border border-teal-300 px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                                        <i class="fa-solid fa-pen-to-square text-[11px]"></i> 編集
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
                         ${r.reason ? `<p class="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">理由: ${escapeHtml(r.reason)}</p>` : ''}
                         ${r.remandComment ? `<p class="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 font-medium"><i class="fa-solid fa-comment-dots"></i> 差し戻しコメント: ${escapeHtml(r.remandComment)}</p>` : ''}
@@ -2102,7 +2322,7 @@
                     saveTrackingCaches();
 
                     if (isGasConfigured()) {
-                        await apiCall("deleteRequest", { reqId });
+                        await apiCall("deleteRequest", { id: reqId, reqId });
                     }
 
                     requestList = requestList.filter(r => String(r.id) !== String(reqId));
