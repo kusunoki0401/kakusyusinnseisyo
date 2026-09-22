@@ -1077,6 +1077,15 @@
             if (m) {
                 return `${parseInt(m[1], 10)}年${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日`;
             }
+            // 英語の日時文字列（例: Mon Sep 21 2026 ...）の正規化
+            const engMatch = s.match(/([A-Za-z]{3})\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+            if (engMatch) {
+                const months = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+                const mNum = months[engMatch[2]] || 1;
+                const dNum = parseInt(engMatch[3], 10);
+                const yNum = parseInt(engMatch[4], 10);
+                return `${yNum}年${mNum}月${dNum}日`;
+            }
             const dt = new Date(s);
             if (!isNaN(dt.getTime())) {
                 return `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日`;
@@ -2075,26 +2084,33 @@
             }
 
             container.innerHTML = myReqs.map(r => {
-                let statusBadge = '<span class="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-[11px] font-bold">申請中</span>';
-                if (r.status === '承認') statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-[11px] font-bold">承認済み</span>';
-                if (r.status === '差し戻し') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full text-[11px] font-bold">差し戻し</span>';
-                if (r.status === '却下') statusBadge = '<span class="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full text-[11px] font-bold">却下</span>';
+                let statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[11px] font-bold">申請中</span>';
+                if (r.status === '承認') statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[11px] font-bold">承認済み</span>';
+                if (r.status === '差し戻し') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full text-[11px] font-bold">差し戻し</span>';
+                if (r.status === '却下') statusBadge = '<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[11px] font-bold">却下</span>';
 
-                // 承認前（申請中 または 差し戻し）の場合に編集ボタンを表示
-                const canEdit = (r.status === '申請中' || r.status === '差し戻し');
+                // 承認前（申請中 または 差し戻し）の場合に編集・取り下げが可能
+                const canModify = (r.status === '申請中' || r.status === '差し戻し');
+                const periodText = formatJpPeriod(r.startDate, r.endDate);
 
                 return `
-                    <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/50 hover:bg-white transition space-y-2">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span class="font-bold text-sm text-slate-800">${escapeHtml(r.type)}</span>
-                                <p class="text-xs text-slate-500 mt-0.5">${r.startDate} ${r.startDate !== r.endDate ? '～ ' + r.endDate : ''} ${r.timeRange !== '-' ? '（時間: ' + escapeHtml(r.timeRange) + '）' : ''}</p>
+                    <div class="border border-slate-200 rounded-xl p-3.5 bg-slate-50/50 hover:bg-white transition space-y-2">
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="space-y-0.5 flex-1 min-w-0">
+                                <span class="font-bold text-sm text-slate-800 truncate block">${escapeHtml(r.type)}</span>
+                                <p class="text-xs text-slate-600 font-medium">
+                                    <i class="fa-regular fa-calendar text-teal-600 mr-1"></i>${periodText}
+                                    ${r.timeRange && r.timeRange !== '-' ? `<span class="text-slate-500 ml-1.5 text-[11px]">（${escapeHtml(r.timeRange)}）</span>` : ''}
+                                </p>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5 shrink-0">
                                 ${statusBadge}
-                                ${canEdit ? `
-                                    <button onclick="startEditRequest('${r.id}')" class="bg-white hover:bg-teal-50 text-teal-700 border border-teal-300 px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm">
-                                        <i class="fa-solid fa-pen-to-square text-[11px]"></i> 編集
+                                ${canModify ? `
+                                    <button onclick="startEditRequest('${r.id}')" title="申請内容を編集" class="bg-white hover:bg-teal-50 text-teal-700 border border-teal-300 px-2 py-0.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                                        <i class="fa-solid fa-pen-to-square text-[10px]"></i><span>編集</span>
+                                    </button>
+                                    <button onclick="confirmWithdrawRequest('${r.id}')" title="申請を取り下げ（削除）" class="bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                                        <i class="fa-solid fa-trash-can text-[10px]"></i><span>取下げ</span>
                                     </button>
                                 ` : ''}
                             </div>
@@ -2104,6 +2120,45 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        function confirmWithdrawRequest(reqId) {
+            const req = requestList.find(r => String(r.id) === String(reqId));
+            if (!req) {
+                showToast('該当の申請が見つかりませんでした', 'fa-circle-exclamation text-rose-400');
+                return;
+            }
+
+            const typeName = req.type || '届出';
+            const periodStr = formatJpPeriod(req.startDate, req.endDate);
+
+            openConfirmDialog(
+                `申請を取り下げますか？`,
+                `「${typeName}（${periodStr}）」の申請を取り下げ（削除）します。取り下げた申請は元に戻せません。よろしいですか？`,
+                '取り下げる',
+                'bg-rose-600 hover:bg-rose-700 text-white',
+                'fa-trash-can',
+                async () => {
+                    // 同期しても復活しないよう削除ブラックリストに登録
+                    deletedRequestIds.add(String(reqId));
+                    saveTrackingCaches();
+
+                    if (isGasConfigured()) {
+                        await apiCall("deleteRequest", { id: reqId, reqId });
+                    }
+
+                    requestList = requestList.filter(r => String(r.id) !== String(reqId));
+                    saveLocalData();
+
+                    // もし現在編集中だった場合は編集モードを解除
+                    if (editingRequestId === String(reqId)) {
+                        cancelEditRequest();
+                    }
+
+                    showToast('申請を取り下げました', 'fa-trash-can text-slate-600');
+                    renderStaffRequests();
+                }
+            );
         }
 
         function setAdminSubTab(tab) {
@@ -2288,7 +2343,7 @@
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                             <div><span class="text-slate-400">届出種別:</span> <strong class="text-teal-700">${escapeHtml(r.type)}</strong></div>
-                            <div><span class="text-slate-400">期間/時間:</span> <strong>${r.startDate} ${r.startDate !== r.endDate ? '～ ' + r.endDate : ''} ${r.timeRange !== '-' ? '（' + escapeHtml(r.timeRange) + '）' : ''}</strong></div>
+                            <div><span class="text-slate-400">期間/時間:</span> <strong>${formatJpPeriod(r.startDate, r.endDate)} ${r.timeRange !== '-' ? '（' + escapeHtml(r.timeRange) + '）' : ''}</strong></div>
                         </div>
 
                         ${r.reason ? `<div class="text-xs bg-slate-50 p-2.5 rounded-lg text-slate-700">理由: ${escapeHtml(r.reason)}</div>` : ''}
