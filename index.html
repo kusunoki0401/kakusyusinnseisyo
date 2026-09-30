@@ -394,8 +394,18 @@
                                 <i class="fa-solid fa-clipboard-check text-amber-600"></i>
                                 <span>スタッフからの届出・申請件数</span>
                             </h3>
-                            <div class="flex gap-2">
-                                <select id="adminStatusFilter" onchange="renderAdminRequests()" class="border border-slate-300 rounded-xl p-2 text-xs">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 shadow-sm">
+                                    <i class="fa-solid fa-arrow-down-wide-short text-slate-500 text-xs"></i>
+                                    <label for="adminSortFilter" class="text-xs font-bold text-slate-600">並び順:</label>
+                                    <select id="adminSortFilter" onchange="renderAdminRequests()" class="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer">
+                                        <option value="date_desc">申請順（新しい順）</option>
+                                        <option value="date_asc">申請順（古い順）</option>
+                                        <option value="name_asc">名前順（五十音順）</option>
+                                        <option value="type_asc">申請内容順（届出種別）</option>
+                                    </select>
+                                </div>
+                                <select id="adminStatusFilter" onchange="renderAdminRequests()" class="border border-slate-300 rounded-xl p-2 text-xs bg-white text-slate-700 font-bold shadow-sm">
                                     <option value="ALL">全てのステータス</option>
                                     <option value="申請中" selected>未判定（申請中）のみ</option>
                                     <option value="承認">承認済み</option>
@@ -1458,10 +1468,15 @@
                         .filter(r => !deletedRequestIds.has(String(r.id)))
                         .map(r => {
                             const cached = processedRequestMap.get(String(r.id));
-                            if (cached) {
-                                return { ...r, status: cached.status, remandComment: cached.remandComment || r.remandComment };
+                            const item = cached ? { ...r, status: cached.status, remandComment: cached.remandComment || r.remandComment } : { ...r };
+                            const rNameClean = String(item.staffName || '').replace(/\s+/g, '');
+                            if (rNameClean) {
+                                const matchedStaff = staffList.find(s => String(s.name || '').replace(/\s+/g, '') === rNameClean);
+                                if (matchedStaff) {
+                                    item.staffId = matchedStaff.id;
+                                }
                             }
-                            return r;
+                            return item;
                         });
 
                     ensureStaffListNotEmpty();
@@ -1519,6 +1534,21 @@
             };
         }
 
+        function findStaffForRequest(r) {
+            if (!r) return null;
+            const rNameClean = String(r.staffName || '').replace(/\s+/g, '');
+            if (rNameClean) {
+                const byName = staffList.find(s => String(s.name || '').replace(/\s+/g, '') === rNameClean);
+                if (byName) return byName;
+            }
+            const rId = String(r.staffId || '').trim();
+            if (rId) {
+                const byId = staffList.find(s => String(s.id) === rId);
+                if (byId) return byId;
+            }
+            return null;
+        }
+
         function loadTrackingCaches() {
             try {
                 const d = localStorage.getItem('kusunoki_deleted_requests');
@@ -1565,7 +1595,15 @@
                     .filter(req => !deletedRequestIds.has(String(req.id)))
                     .map(req => {
                         const cached = processedRequestMap.get(String(req.id));
-                        return cached ? { ...req, status: cached.status, remandComment: cached.remandComment || req.remandComment } : req;
+                        const item = cached ? { ...req, status: cached.status, remandComment: cached.remandComment || req.remandComment } : { ...req };
+                        const rNameClean = String(item.staffName || '').replace(/\s+/g, '');
+                        if (rNameClean) {
+                            const matchedStaff = staffList.find(st => String(st.name || '').replace(/\s+/g, '') === rNameClean);
+                            if (matchedStaff) {
+                                item.staffId = matchedStaff.id;
+                            }
+                        }
+                        return item;
                     });
             } catch (e) {
                 staffList = [];
@@ -2144,7 +2182,14 @@
             const container = document.getElementById('staffRequestList');
             if (!container || !currentUser) return;
 
-            const myReqs = requestList.filter(r => String(r.staffId) === String(currentUser.id));
+            const currentUserNameClean = currentUser.name ? currentUser.name.replace(/\s+/g, '') : '';
+            const myReqs = requestList.filter(r => {
+                const rNameClean = String(r.staffName || '').replace(/\s+/g, '');
+                if (rNameClean && currentUserNameClean) {
+                    return rNameClean === currentUserNameClean;
+                }
+                return String(r.staffId || '').trim() === String(currentUser.id);
+            });
 
             if (myReqs.length === 0) {
                 container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs">申請履歴はありません</div>`;
@@ -2314,14 +2359,21 @@
                     if (reqMonth && reqMonth !== targetMonth) return false;
                 }
 
-                // 3. スタッフ判定（ID一致、または名前一致）
+                // 3. スタッフ判定（氏名による厳密一致、氏名不在時のみID判定）
                 if (selectedStaffId !== 'ALL') {
-                    const rStaffId = String(r.staffId || '').trim();
                     const rStaffNameClean = String(r.staffName || '').replace(/\s+/g, '');
-                    const isIdMatch = (rStaffId === String(selectedStaffId));
-                    const isNameMatch = (targetStaffNameClean && rStaffNameClean === targetStaffNameClean);
-                    if (!isIdMatch && !isNameMatch) {
-                        return false;
+                    const rStaffId = String(r.staffId || '').trim();
+
+                    if (rStaffNameClean) {
+                        // 申請データに氏名がある場合は、選択したスタッフの氏名と完全一致するもののみ（他人の混入を完全防止）
+                        if (!targetStaffNameClean || rStaffNameClean !== targetStaffNameClean) {
+                            return false;
+                        }
+                    } else {
+                        // 申請データに氏名がない場合のみ、IDで判定
+                        if (rStaffId !== String(selectedStaffId)) {
+                            return false;
+                        }
                     }
                 }
 
@@ -2364,12 +2416,15 @@
                     statusBadge = '<span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-sm"><i class="fa-solid fa-ban"></i> 却下</span>';
                 }
 
+                const staffObj = findStaffForRequest(r);
+                const displayStaffId = staffObj ? staffObj.id : (r.staffId || '--');
+
                 return `
                     <div class="border border-slate-200 rounded-2xl p-4 sm:p-5 bg-white shadow-sm hover:shadow-md transition space-y-3">
                         <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
                             <div class="flex items-center space-x-2.5">
                                 <span class="font-extrabold text-base sm:text-lg text-slate-800">${escapeHtml(r.staffName)}</span>
-                                <span class="text-xs text-slate-400 font-mono font-bold">(ID: ${escapeHtml(r.staffId)})</span>
+                                <span class="text-xs text-slate-400 font-mono font-bold">(ID: ${escapeHtml(displayStaffId)})</span>
                             </div>
                             ${statusBadge}
                         </div>
@@ -2393,9 +2448,78 @@
             }).join('');
         }
 
+        function getRequestSortTimestamp(r) {
+            if (!r) return 0;
+            if (r.createdAt) {
+                const s = String(r.createdAt).replace(/[年月日]/g, '-').replace(/\s+/g, ' ').trim();
+                const t = Date.parse(s);
+                if (!isNaN(t)) return t;
+                const m = s.match(/\d+/g);
+                if (m && m.length >= 3) {
+                    const y = parseInt(m[0], 10);
+                    const mon = parseInt(m[1], 10) - 1;
+                    const d = parseInt(m[2], 10);
+                    const h = parseInt(m[3] || 0, 10);
+                    const min = parseInt(m[4] || 0, 10);
+                    const sec = parseInt(m[5] || 0, 10);
+                    return new Date(y, mon, d, h, min, sec).getTime();
+                }
+            }
+            if (r.startDate) {
+                const t = Date.parse(r.startDate);
+                if (!isNaN(t)) return t;
+            }
+            if (r.id) {
+                const num = parseInt(String(r.id).replace(/\D/g, ''), 10);
+                if (!isNaN(num)) return num;
+            }
+            return 0;
+        }
+
+        const REQUEST_TYPE_PRIORITY = {
+            '有給届': 10,
+            '有給届（全休）': 10,
+            '有給届（午前半休）': 11,
+            '有給届（午後半休）': 12,
+            '早出申請書': 20,
+            '残業申請書': 30,
+            '休日出勤届': 40,
+            '遅刻届': 50,
+            '早退届': 60,
+            '外出申請書': 70,
+            '慶弔届': 80
+        };
+
+        function getRequestTypePriority(typeStr) {
+            if (!typeStr) return 999;
+            const s = String(typeStr).trim();
+            if (REQUEST_TYPE_PRIORITY[s] !== undefined) return REQUEST_TYPE_PRIORITY[s];
+            for (const [key, val] of Object.entries(REQUEST_TYPE_PRIORITY)) {
+                if (s.startsWith(key)) return val;
+            }
+            return 100;
+        }
+
         function renderAdminRequests() {
             const container = document.getElementById('adminRequestList');
-            const filter = document.getElementById('adminStatusFilter').value;
+            if (!container) return;
+
+            const filter = document.getElementById('adminStatusFilter') ? document.getElementById('adminStatusFilter').value : 'ALL';
+            const sortOrderEl = document.getElementById('adminSortFilter');
+            let sortOrder = sortOrderEl ? sortOrderEl.value : 'date_desc';
+
+            // 初回表示時にローカルストレージの保存設定があれば復元
+            if (sortOrderEl) {
+                const savedSort = localStorage.getItem('kusunoki_admin_sort_order');
+                if (savedSort && !sortOrderEl.dataset.initialized) {
+                    sortOrder = savedSort;
+                    sortOrderEl.value = savedSort;
+                    sortOrderEl.dataset.initialized = 'true';
+                } else {
+                    localStorage.setItem('kusunoki_admin_sort_order', sortOrder);
+                }
+            }
+
             const pendingBadge = document.getElementById('pendingBadge');
 
             const pendingCount = requestList.filter(r => r.status === '申請中').length;
@@ -2411,8 +2535,41 @@
                 return;
             }
 
-            container.innerHTML = filtered.map(r => {
-                const staff = staffList.find(s => s.id === r.staffId);
+            // 指定された並び順でソート
+            const sorted = [...filtered].sort((a, b) => {
+                if (sortOrder === 'date_desc') {
+                    // 申請順（新しい順）
+                    const diff = getRequestSortTimestamp(b) - getRequestSortTimestamp(a);
+                    if (diff !== 0) return diff;
+                    return String(b.id || '').localeCompare(String(a.id || ''));
+                } else if (sortOrder === 'date_asc') {
+                    // 申請順（古い順）
+                    const diff = getRequestSortTimestamp(a) - getRequestSortTimestamp(b);
+                    if (diff !== 0) return diff;
+                    return String(a.id || '').localeCompare(String(b.id || ''));
+                } else if (sortOrder === 'name_asc') {
+                    // 名前順（五十音順）
+                    const nameA = String(a.staffName || '').replace(/\s+/g, '');
+                    const nameB = String(b.staffName || '').replace(/\s+/g, '');
+                    const nameDiff = nameA.localeCompare(nameB, 'ja');
+                    if (nameDiff !== 0) return nameDiff;
+                    // 同名の場合は申請日時の新しい順
+                    return getRequestSortTimestamp(b) - getRequestSortTimestamp(a);
+                } else if (sortOrder === 'type_asc') {
+                    // 申請内容順（届出種別順）
+                    const orderA = getRequestTypePriority(a.type);
+                    const orderB = getRequestTypePriority(b.type);
+                    if (orderA !== orderB) return orderA - orderB;
+                    const typeDiff = String(a.type || '').localeCompare(String(b.type || ''), 'ja');
+                    if (typeDiff !== 0) return typeDiff;
+                    // 同種別の場合は申請日時の新しい順
+                    return getRequestSortTimestamp(b) - getRequestSortTimestamp(a);
+                }
+                return 0;
+            });
+
+            container.innerHTML = sorted.map(r => {
+                const staff = findStaffForRequest(r);
                 const remaining = staff ? ((staff.carriedOver + staff.currentGranted) - staff.used).toFixed(1) : '--';
 
                 return `
