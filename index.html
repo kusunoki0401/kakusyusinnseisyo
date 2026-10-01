@@ -480,12 +480,80 @@
                             </div>
                         </div>
 
-                        <div class="flex flex-wrap justify-between items-center text-sm sm:text-base font-bold text-slate-700 mb-4 bg-teal-50/60 p-4 rounded-xl border border-teal-100">
-                            <div>
-                                該当件数: <strong id="searchResultCount" class="text-teal-700 text-lg sm:text-xl font-extrabold ml-1">0</strong> 件
+                        <!-- 月別照会 集計ダッシュボード -->
+                        <div class="mb-5 bg-gradient-to-br from-teal-50/80 via-emerald-50/40 to-slate-50 p-4 sm:p-5 rounded-2xl border border-teal-200/80 shadow-sm space-y-3.5">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-teal-200/60 pb-2.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></span>
+                                    <span class="text-xs sm:text-sm font-extrabold text-teal-900 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-chart-pie text-teal-600"></i> 集計サマリー
+                                    </span>
+                                    <span id="searchSummaryTargetLabel" class="text-[11px] sm:text-xs font-bold text-teal-700 bg-white/90 border border-teal-200 px-2.5 py-0.5 rounded-full shadow-xs">
+                                        全期間・全スタッフ
+                                    </span>
+                                </div>
+                                <span class="hidden" id="searchResultDays">0.0</span>
+                                <div class="text-[11px] text-slate-500 font-bold">
+                                    ※ 絞り込み条件（年月・スタッフ・種別・状態）に自動連動
+                                </div>
                             </div>
-                            <div>
-                                合計申請日数: <strong id="searchResultDays" class="text-teal-700 text-lg sm:text-xl font-extrabold ml-1">0.0</strong> 日
+
+                            <!-- 主要4指標カード -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                                <div class="bg-white p-3 rounded-xl border border-teal-100 shadow-xs flex flex-col justify-between">
+                                    <div class="text-[11px] font-extrabold text-slate-500 flex items-center gap-1">
+                                        <i class="fa-solid fa-list-check text-teal-600"></i> 該当総件数
+                                    </div>
+                                    <div class="mt-1 flex items-baseline gap-1">
+                                        <span id="searchResultCount" class="text-xl sm:text-2xl font-black text-slate-800">0</span>
+                                        <span class="text-xs font-bold text-slate-500">件</span>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white p-3 rounded-xl border border-emerald-100 shadow-xs flex flex-col justify-between">
+                                    <div class="text-[11px] font-extrabold text-emerald-700 flex items-center gap-1">
+                                        <i class="fa-solid fa-umbrella-beach text-emerald-600"></i> 有給取得日数
+                                    </div>
+                                    <div class="mt-1 flex items-baseline gap-1">
+                                        <span id="summaryPaidLeaveDays" class="text-xl sm:text-2xl font-black text-emerald-700">0.0</span>
+                                        <span class="text-xs font-bold text-emerald-600">日</span>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white p-3 rounded-xl border border-amber-100 shadow-xs flex flex-col justify-between">
+                                    <div class="text-[11px] font-extrabold text-amber-700 flex items-center gap-1">
+                                        <i class="fa-solid fa-business-time text-amber-600"></i> 残業総時間
+                                    </div>
+                                    <div class="mt-1">
+                                        <div class="flex items-baseline gap-1">
+                                            <span id="summaryOvertimeHours" class="text-base sm:text-xl font-black text-amber-800">0分</span>
+                                        </div>
+                                        <div id="summaryOvertimeDec" class="text-[11px] font-bold text-amber-600 mt-0.5">0.0h</div>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs flex flex-col justify-between">
+                                    <div class="text-[11px] font-extrabold text-indigo-700 flex items-center gap-1">
+                                        <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i> 早出総時間
+                                    </div>
+                                    <div class="mt-1">
+                                        <div class="flex items-baseline gap-1">
+                                            <span id="summaryEarlyHours" class="text-base sm:text-xl font-black text-indigo-800">0分</span>
+                                        </div>
+                                        <div id="summaryEarlyDec" class="text-[11px] font-bold text-indigo-600 mt-0.5">0.0h</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 各申請内容別の詳細集計ブロック -->
+                            <div class="pt-2 border-t border-teal-200/50">
+                                <div class="text-xs font-extrabold text-slate-700 mb-2 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-table-cells-large text-teal-600"></i>
+                                    <span>各申請内容別の集計内訳</span>
+                                </div>
+                                <div id="searchDetailBreakdownGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5">
+                                    <!-- 動的生成 -->
+                                </div>
                             </div>
                         </div>
 
@@ -1077,11 +1145,11 @@
         function parseYearMonth(dateStr) {
             if (!dateStr) return '';
             const s = String(dateStr).trim();
-            const match = s.match(/^(\d{4})[-/.](\d{1,2})/);
+            const match = s.match(/^(\d{4})[-/.年](\d{1,2})/);
             if (match) {
                 return `${match[1]}-${match[2].padStart(2, '0')}`;
             }
-            const dt = new Date(s);
+            const dt = new Date(s.replace(/\s*\([^)]*\)/, ''));
             if (!isNaN(dt.getTime())) {
                 const y = dt.getFullYear();
                 const m = String(dt.getMonth() + 1).padStart(2, '0');
@@ -2353,6 +2421,61 @@
             }
         }
 
+        function parseRequestMinutes(r) {
+            if (!r) return 0;
+            const timeRange = r.timeRange;
+            if (!timeRange || timeRange === '-') return 0;
+            const matches = Array.from(timeRange.matchAll(/(\d{1,2}):(\d{2})\s*[～~-]\s*(\d{1,2}):(\d{2})/g));
+            if (!matches || matches.length === 0) return 0;
+            function getDiff(m) {
+                const s = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+                let e = parseInt(m[3], 10) * 60 + parseInt(m[4], 10);
+                if (e < s) e += 24 * 60;
+                return e - s;
+            }
+            const firstDiff = getDiff(matches[0]);
+            // 申請者が通常シフト枠と残業枠を逆に入力した場合の補正（第1枠が7時間以上の通常シフトで、第2枠に残業時間がある場合）
+            if (matches.length > 1 && firstDiff >= 420) {
+                const secondDiff = getDiff(matches[1]);
+                if (secondDiff > 0 && secondDiff < 420) return secondDiff;
+            }
+            return firstDiff;
+        }
+
+        function formatMinutesLabel(minutes) {
+            if (!minutes || minutes <= 0) return '0分';
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            if (h > 0 && m > 0) return `${h}時間${m}分`;
+            if (h > 0) return `${h}時間`;
+            return `${m}分`;
+        }
+
+        function getSearchTypeCardConfig(typeName) {
+            const configs = {
+                '有給届': { icon: 'fa-umbrella-beach', bg: 'bg-emerald-50/80', border: 'border-emerald-200', text: 'text-emerald-800', badge: 'bg-emerald-100 text-emerald-800' },
+                '有給届（全休）': { icon: 'fa-umbrella-beach', bg: 'bg-emerald-50/80', border: 'border-emerald-200', text: 'text-emerald-800', badge: 'bg-emerald-100 text-emerald-800' },
+                '有給届（午前半休）': { icon: 'fa-sun', bg: 'bg-teal-50/80', border: 'border-teal-200', text: 'text-teal-800', badge: 'bg-teal-100 text-teal-800' },
+                '有給届（午後半休）': { icon: 'fa-moon', bg: 'bg-teal-50/80', border: 'border-teal-200', text: 'text-teal-800', badge: 'bg-teal-100 text-teal-800' },
+                '残業申請書': { icon: 'fa-business-time', bg: 'bg-amber-50/80', border: 'border-amber-200', text: 'text-amber-800', badge: 'bg-amber-100 text-amber-800' },
+                '早出申請書': { icon: 'fa-clock-rotate-left', bg: 'bg-indigo-50/80', border: 'border-indigo-200', text: 'text-indigo-800', badge: 'bg-indigo-100 text-indigo-800' },
+                '休日出勤届': { icon: 'fa-calendar-plus', bg: 'bg-rose-50/80', border: 'border-rose-200', text: 'text-rose-800', badge: 'bg-rose-100 text-rose-800' },
+                '遅刻届': { icon: 'fa-person-running', bg: 'bg-orange-50/80', border: 'border-orange-200', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-800' },
+                '早退届': { icon: 'fa-person-walking-arrow-right', bg: 'bg-orange-50/80', border: 'border-orange-200', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-800' },
+                '外出申請書': { icon: 'fa-door-open', bg: 'bg-sky-50/80', border: 'border-sky-200', text: 'text-sky-800', badge: 'bg-sky-100 text-sky-800' },
+                '欠勤届': { icon: 'fa-bed', bg: 'bg-red-50/80', border: 'border-red-200', text: 'text-red-800', badge: 'bg-red-100 text-red-800' },
+                '慶弔休暇': { icon: 'fa-heart', bg: 'bg-purple-50/80', border: 'border-purple-200', text: 'text-purple-800', badge: 'bg-purple-100 text-purple-800' },
+                '慶弔届': { icon: 'fa-heart', bg: 'bg-purple-50/80', border: 'border-purple-200', text: 'text-purple-800', badge: 'bg-purple-100 text-purple-800' },
+                'ホーム会議欠席届': { icon: 'fa-hand', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-800', badge: 'bg-slate-200 text-slate-700' }
+            };
+            if (!typeName) return { icon: 'fa-file-lines', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-800', badge: 'bg-slate-100 text-slate-700' };
+            if (configs[typeName]) return configs[typeName];
+            for (const [key, conf] of Object.entries(configs)) {
+                if (typeName.includes(key)) return conf;
+            }
+            return { icon: 'fa-file-lines', bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-800', badge: 'bg-slate-100 text-slate-700' };
+        }
+
         function renderAdminSearchResults() {
             const container = document.getElementById('adminSearchResultList');
             if (!container) return;
@@ -2381,7 +2504,7 @@
                 // 2. 対象年月（指定がある場合のみ絞り込み）
                 if (targetMonth) {
                     const reqMonth = parseYearMonth(r.startDate || r.createdAt);
-                    if (reqMonth && reqMonth !== targetMonth) return false;
+                    if (!reqMonth || reqMonth !== targetMonth) return false;
                 }
 
                 // 3. スタッフ判定（氏名による厳密一致、氏名不在時のみID判定）
@@ -2413,10 +2536,127 @@
             const totalCount = filtered.length;
             const totalDays = filtered.reduce((sum, r) => sum + (parseFloat(r.days) || 0), 0);
 
+            // 集計計算（有給休暇取得日数、残業総時間、早出総時間、申請別内訳）
+            let paidLeaveDays = 0;
+            let overtimeMinutes = 0;
+            let earlyMinutes = 0;
+            const breakdownMap = {};
+
+            filtered.forEach(r => {
+                const type = r.type || 'その他';
+                const days = parseFloat(r.days) || 0;
+                const minutes = parseRequestMinutes(r);
+
+                // 有給休暇の集計（全休1.0、半休0.5を正確に積算）
+                if (type.includes('有給')) {
+                    paidLeaveDays += days;
+                }
+                // 残業時間の集計
+                if (type.includes('残業')) {
+                    overtimeMinutes += minutes;
+                }
+                // 早出時間の集計
+                if (type.includes('早出')) {
+                    earlyMinutes += minutes;
+                }
+
+                // 申請種別ごとの内訳集計
+                if (!breakdownMap[type]) {
+                    breakdownMap[type] = { count: 0, days: 0, minutes: 0 };
+                }
+                breakdownMap[type].count++;
+                breakdownMap[type].days += days;
+                breakdownMap[type].minutes += minutes;
+            });
+
+            // 集計ダッシュボード要素の更新
             const countEl = document.getElementById('searchResultCount');
             const daysEl = document.getElementById('searchResultDays');
+            const paidDaysEl = document.getElementById('summaryPaidLeaveDays');
+            const otHoursEl = document.getElementById('summaryOvertimeHours');
+            const otDecEl = document.getElementById('summaryOvertimeDec');
+            const earlyHoursEl = document.getElementById('summaryEarlyHours');
+            const earlyDecEl = document.getElementById('summaryEarlyDec');
+            const targetLabelEl = document.getElementById('searchSummaryTargetLabel');
+            const breakdownGridEl = document.getElementById('searchDetailBreakdownGrid');
+
             if (countEl) countEl.textContent = totalCount;
             if (daysEl) daysEl.textContent = totalDays.toFixed(1);
+            if (paidDaysEl) paidDaysEl.textContent = paidLeaveDays.toFixed(1);
+            if (otHoursEl) otHoursEl.textContent = formatMinutesLabel(overtimeMinutes);
+            if (otDecEl) otDecEl.textContent = `${(overtimeMinutes / 60).toFixed(1)}h`;
+            if (earlyHoursEl) earlyHoursEl.textContent = formatMinutesLabel(earlyMinutes);
+            if (earlyDecEl) earlyDecEl.textContent = `${(earlyMinutes / 60).toFixed(1)}h`;
+
+            if (targetLabelEl) {
+                const monthText = targetMonth ? `${targetMonth.slice(0, 4)}年${targetMonth.slice(5)}月` : '全期間';
+                const staffText = targetStaffObj ? `${targetStaffObj.name}さん` : '全スタッフ';
+                let statusText = '';
+                if (selectedStatus === 'APPROVED') statusText = '（承認済）';
+                else if (selectedStatus === 'PENDING') statusText = '（申請中）';
+                else if (selectedStatus === 'REMAND') statusText = '（差し戻し）';
+                else if (selectedStatus === 'REJECTED') statusText = '（却下）';
+                targetLabelEl.textContent = `${monthText}・${staffText}${statusText}`;
+            }
+
+            // 各申請種別の内訳カード描画
+            if (breakdownGridEl) {
+                const breakdownKeys = Object.keys(breakdownMap);
+                if (breakdownKeys.length === 0) {
+                    breakdownGridEl.innerHTML = `
+                        <div class="col-span-full text-center py-3 text-slate-400 text-xs font-bold bg-white/60 rounded-xl border border-dashed border-teal-200">
+                            該当する申請データはありません
+                        </div>
+                    `;
+                } else {
+                    // 並び順: 有給 -> 早出 -> 残業 -> 休日出勤 -> 遅刻 -> 早退 -> 外出 -> その他
+                    breakdownKeys.sort((a, b) => getRequestTypePriority(a) - getRequestTypePriority(b));
+                    breakdownGridEl.innerHTML = breakdownKeys.map(type => {
+                        const item = breakdownMap[type];
+                        const cfg = getSearchTypeCardConfig(type);
+                        let primaryMetricHtml = '';
+
+                        if (type.includes('有給') || type.includes('欠勤') || type.includes('慶弔')) {
+                            primaryMetricHtml = `
+                                <div class="text-base sm:text-lg font-black ${cfg.text}">
+                                    ${item.days.toFixed(1)} <span class="text-xs font-bold text-slate-500">日</span>
+                                </div>
+                            `;
+                        } else if (type.includes('残業') || type.includes('早出') || type.includes('遅刻') || type.includes('早退') || type.includes('外出')) {
+                            primaryMetricHtml = `
+                                <div class="text-sm sm:text-base font-black ${cfg.text}">${formatMinutesLabel(item.minutes)}</div>
+                                <div class="text-[11px] font-bold text-slate-500">${(item.minutes / 60).toFixed(1)}h</div>
+                            `;
+                        } else if (type.includes('休日出勤')) {
+                            primaryMetricHtml = `
+                                <div class="text-sm sm:text-base font-black ${cfg.text}">${formatMinutesLabel(item.minutes)}</div>
+                                <div class="text-[11px] font-bold text-slate-500">${(item.minutes / 60).toFixed(1)}h / ${item.days.toFixed(1)}日</div>
+                            `;
+                        } else {
+                            primaryMetricHtml = item.days > 0 
+                                ? `<div class="text-base sm:text-lg font-black ${cfg.text}">${item.days.toFixed(1)} <span class="text-xs font-bold text-slate-500">日</span></div>`
+                                : `<div class="text-base sm:text-lg font-black ${cfg.text}">${item.count} <span class="text-xs font-bold text-slate-500">件</span></div>`;
+                        }
+
+                        return `
+                            <div class="${cfg.bg} border ${cfg.border} rounded-xl p-2.5 sm:p-3 flex flex-col justify-between shadow-xs hover:shadow-sm transition">
+                                <div class="flex items-center justify-between gap-1 mb-1">
+                                    <span class="text-xs font-extrabold ${cfg.text} truncate flex items-center gap-1.5" title="${escapeHtml(type)}">
+                                        <i class="fa-solid ${cfg.icon}"></i>
+                                        <span class="truncate">${escapeHtml(type)}</span>
+                                    </span>
+                                    <span class="text-[10px] sm:text-[11px] font-black px-1.5 py-0.5 rounded-full ${cfg.badge} shrink-0">
+                                        ${item.count}件
+                                    </span>
+                                </div>
+                                <div class="mt-1">
+                                    ${primaryMetricHtml}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
 
             if (filtered.length === 0) {
                 const periodLabel = targetMonth ? `${targetMonth}` : '全期間';
