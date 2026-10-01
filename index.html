@@ -368,7 +368,7 @@
                         </button>
                         <button id="adminTabStaff" onclick="setAdminSubTab('staff')" class="py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-50 transition flex items-center justify-center space-x-1">
                             <i class="fa-solid fa-users-gear text-slate-500"></i>
-                            <span class="truncate">有休台帳</span>
+                            <span class="truncate">スタッフ一覧・有休台帳</span>
                         </button>
                         <button id="adminTabSearch" onclick="setAdminSubTab('search')" class="py-3 px-2 sm:px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-50 transition flex items-center justify-center space-x-1">
                             <i class="fa-solid fa-magnifying-glass text-slate-500"></i>
@@ -514,7 +514,7 @@
                                     <option value="退職">退職者のみ</option>
                                     <option value="ALL">全員表示</option>
                                 </select>
-                                <input type="text" id="staffSearchInput" onkeyup="renderStaffTable()" placeholder="氏名・役職で検索..." class="border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500">
+                                <input type="text" id="staffSearchInput" onkeyup="renderStaffTable()" placeholder="氏名・役職で検索..." autocomplete="off" class="border border-slate-300 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-teal-500">
                                 <button onclick="openRegisterModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1 shrink-0">
                                     <i class="fa-solid fa-plus"></i> 新規登録
                                 </button>
@@ -1454,12 +1454,19 @@
         }
 
         async function fetchLatestData() {
+            // 起動時にまずローカルデータを即座に読み込み、画面の空欄・空白化を防止
+            if (!staffList || staffList.length === 0) {
+                loadLocalData();
+            }
+
             if (isGasConfigured()) {
                 const res = await apiCall("getAllData");
                 if (res && res.success) {
                     const rawStaffList = res.staffList || [];
-                    // スプレッドシートの各スタッフ項目を正規化して完全反映
-                    staffList = rawStaffList.map(s => normalizeStaffItem(s)).filter(Boolean);
+                    if (rawStaffList.length > 0) {
+                        // スプレッドシートの各スタッフ項目を正規化して完全反映
+                        staffList = rawStaffList.map(s => normalizeStaffItem(s)).filter(Boolean);
+                    }
                     
                     const incomingRequests = res.requestList || [];
                     // 削除済み・処理済みステータスを優先マージし、同期による未処理への先祖返りを防止
@@ -1482,11 +1489,28 @@
                     ensureStaffListNotEmpty();
                     saveLocalData();
                     updateSyncBadge(true);
+
+                    // 最新データ取得完了時に現在表示中の画面を即時自動更新
+                    if (currentUser && currentUser.isAdmin) {
+                        if (activeAdminSubTab === 'staff') renderStaffTable();
+                        if (activeAdminSubTab === 'requests') renderAdminRequests();
+                        if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                        initSearchFilters();
+                    } else if (currentUser) {
+                        renderStaffRequests();
+                        if (typeof updateStaffCard === 'function') updateStaffCard();
+                    }
                     return;
                 }
             }
             loadLocalData();
             updateSyncBadge(false, 'ローカル保持 (GAS通信未接続)');
+            if (currentUser && currentUser.isAdmin) {
+                if (activeAdminSubTab === 'staff') renderStaffTable();
+                if (activeAdminSubTab === 'requests') renderAdminRequests();
+                if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                initSearchFilters();
+            }
         }
 
         function normalizeDateToYmd(dVal) {
@@ -1613,6 +1637,7 @@
         }
 
         const DEFAULT_STAFF_MASTER = {
+            '1003': { id: '1003', name: '吉田恭子', role: '介護士', pin: '0123', hireDate: '', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1004': { id: '1004', name: '佐々木大介', role: '管理者', pin: '0730', hireDate: '2017-04-10', carriedOver: 6.0, currentGranted: 20.0, used: 1.0, status: '在職' },
             '1005': { id: '1005', name: '小野早美', role: '看護師', pin: '9153', hireDate: '2026-04-01', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1006': { id: '1006', name: '前田昌子', role: '清掃', pin: '1114', hireDate: '2026-06-22', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
@@ -2637,12 +2662,23 @@
 
         function renderStaffTable() {
             const tbody = document.getElementById('staffTableBody');
-            const search = document.getElementById('staffSearchInput').value.toLowerCase();
-            const statusFilter = document.getElementById('staffStatusFilter').value;
             if (!tbody) return;
 
-            let filtered = staffList.filter(s => {
-                const nameMatch = s.name.toLowerCase().includes(search) || (s.role && s.role.toLowerCase().includes(search));
+            // staffListが空の場合、即座にローカルデータまたはマスタから復元
+            if (!staffList || staffList.length === 0) {
+                loadLocalData();
+            }
+
+            const searchInput = document.getElementById('staffSearchInput');
+            const search = searchInput ? searchInput.value.trim().toLowerCase() : '';
+            const statusFilterEl = document.getElementById('staffStatusFilter');
+            const statusFilter = statusFilterEl ? statusFilterEl.value : '在職';
+
+            let filtered = (staffList || []).filter(s => {
+                if (!s) return false;
+                const sName = String(s.name || '').toLowerCase();
+                const sRole = String(s.role || '').toLowerCase();
+                const nameMatch = !search || sName.includes(search) || sRole.includes(search);
                 const sStatus = s.status || '在職';
                 if (statusFilter === 'ALL') return nameMatch;
                 return nameMatch && sStatus === statusFilter;
@@ -3019,6 +3055,7 @@
         }
 
         window.onload = function() {
+            loadLocalData();
             fetchLatestData();
             setLoginMode('staff');
         };
