@@ -87,6 +87,12 @@
                     <div id="headerUserRole" class="text-xs text-teal-200">--</div>
                 </div>
 
+                <!-- 管理者権限スタッフ（佐々木様等）向けの画面切替ボタン（一般スタッフには完全非表示） -->
+                <button id="headerSwitchViewBtn" type="button" onclick="toggleAdminStaffView()" class="hidden bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold px-3 py-2 rounded-xl transition shadow-sm items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-user-shield text-slate-900"></i>
+                    <span id="headerSwitchViewBtnText">管理者画面へ</span>
+                </button>
+
                 <button onclick="handleLogout()" class="bg-teal-800 hover:bg-teal-900 text-white text-xs px-3 py-2.5 rounded-xl transition border border-teal-600 flex items-center space-x-1.5 shadow-sm">
                     <i class="fa-solid fa-right-from-bracket"></i>
                     <span>ログアウト</span>
@@ -1559,25 +1565,30 @@
                     updateSyncBadge(true);
 
                     // 最新データ取得完了時に現在表示中の画面を即時自動更新
-                    if (currentUser && currentUser.isAdmin) {
+                    const isAdminVisible = !document.getElementById('adminView').classList.contains('hidden');
+                    if (isAdminVisible) {
                         if (activeAdminSubTab === 'staff') renderStaffTable();
                         if (activeAdminSubTab === 'requests') renderAdminRequests();
                         if (activeAdminSubTab === 'search') renderAdminSearchResults();
                         initSearchFilters();
-                    } else if (currentUser) {
+                    } else if (currentUser && currentUser.id !== 'admin') {
+                        refreshStaffCard();
                         renderStaffRequests();
-                        if (typeof updateStaffCard === 'function') updateStaffCard();
                     }
                     return;
                 }
             }
             loadLocalData();
             updateSyncBadge(false, 'ローカル保持 (GAS通信未接続)');
-            if (currentUser && currentUser.isAdmin) {
+            const isAdminVisibleOffline = !document.getElementById('adminView').classList.contains('hidden');
+            if (isAdminVisibleOffline) {
                 if (activeAdminSubTab === 'staff') renderStaffTable();
                 if (activeAdminSubTab === 'requests') renderAdminRequests();
                 if (activeAdminSubTab === 'search') renderAdminSearchResults();
                 initSearchFilters();
+            } else if (currentUser && currentUser.id !== 'admin') {
+                refreshStaffCard();
+                renderStaffRequests();
             }
         }
 
@@ -1706,7 +1717,7 @@
 
         const DEFAULT_STAFF_MASTER = {
             '1003': { id: '1003', name: '吉田恭子', role: '介護士', pin: '0123', hireDate: '', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
-            '1004': { id: '1004', name: '佐々木大介', role: '管理者', pin: '0730', hireDate: '2017-04-10', carriedOver: 6.0, currentGranted: 20.0, used: 1.0, status: '在職' },
+            '1004': { id: '1004', name: '佐々木大介', role: '管理者', pin: '7030', hireDate: '2017-04-10', carriedOver: 6.0, currentGranted: 20.0, used: 1.0, status: '在職' },
             '1005': { id: '1005', name: '小野早美', role: '看護師', pin: '9153', hireDate: '2026-04-01', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1006': { id: '1006', name: '前田昌子', role: '清掃', pin: '1114', hireDate: '2026-06-22', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1007': { id: '1007', name: '樋渡絵美', role: '介護士', pin: '5825', hireDate: '2023-02-01', carriedOver: 5.5, currentGranted: 14.0, used: 0.0, status: '在職' },
@@ -1835,7 +1846,9 @@
                 }
                 const staffPinFormatted = normalizeNumber(staff.pin || '').padStart(4, '0');
                 const inputPinFormatted = pinInput.padStart(4, '0');
-                if (staffPinFormatted === inputPinFormatted || pinInput === '1234' || pinInput === '0000') {
+                // 1004（佐々木様）は 7030 と 0730（730）の双方の入力を許可
+                const is1004ValidPin = (idInput === '1004' && (inputPinFormatted === '7030' || inputPinFormatted === '0730' || pinInput === '730' || pinInput === '7030'));
+                if (staffPinFormatted === inputPinFormatted || is1004ValidPin || pinInput === '1234' || pinInput === '0000') {
                     currentUser = staff;
                     if (errorBox) errorBox.classList.add('hidden');
                     clearLoginInputs();
@@ -1857,6 +1870,9 @@
             const modalPin = document.getElementById('modalAdminPin');
             if (modalPin) modalPin.value = '';
 
+            const switchBtn = document.getElementById('headerSwitchViewBtn');
+            if (switchBtn) switchBtn.classList.add('hidden');
+
             document.getElementById('mainApp').classList.add('hidden');
             document.getElementById('staffView').classList.add('hidden');
             document.getElementById('adminView').classList.add('hidden');
@@ -1864,6 +1880,43 @@
             document.getElementById('unauthHeaderAdminBtn').classList.remove('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             showToast('ログアウトしました', 'fa-right-from-bracket text-slate-400');
+        }
+
+        function isUserAdmin(user) {
+            if (!user) return false;
+            return Boolean(user.isAdmin || user.role === '管理者' || user.id === 'admin' || String(user.id) === '1004');
+        }
+
+        function toggleAdminStaffView() {
+            if (!isUserAdmin(currentUser)) return;
+            const adminView = document.getElementById('adminView');
+            const staffView = document.getElementById('staffView');
+            const switchBtn = document.getElementById('headerSwitchViewBtn');
+            if (!adminView || !staffView) return;
+
+            const isAdminCurrentlyVisible = !adminView.classList.contains('hidden');
+            if (isAdminCurrentlyVisible) {
+                // 管理者画面 -> スタッフ画面（マイページ）へ切り替え
+                adminView.classList.add('hidden');
+                staffView.classList.remove('hidden');
+                refreshStaffCard();
+                renderStaffRequests();
+                if (switchBtn) {
+                    switchBtn.innerHTML = `<i class="fa-solid fa-user-shield text-slate-900"></i> <span id="headerSwitchViewBtnText">管理者画面へ</span>`;
+                    switchBtn.className = "bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold px-3 py-2 rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer";
+                }
+                showToast('スタッフ画面（マイページ）に切り替えました', 'fa-user text-teal-400');
+            } else {
+                // スタッフ画面 -> 管理者画面へ切り替え
+                staffView.classList.add('hidden');
+                adminView.classList.remove('hidden');
+                setAdminSubTab(activeAdminSubTab || 'requests');
+                if (switchBtn) {
+                    switchBtn.innerHTML = `<i class="fa-solid fa-user text-teal-100"></i> <span id="headerSwitchViewBtnText">マイページへ</span>`;
+                    switchBtn.className = "bg-teal-800 hover:bg-teal-900 text-teal-100 hover:text-white text-xs font-bold px-3 py-2 rounded-xl transition border border-teal-600 flex items-center gap-1.5 cursor-pointer shadow-sm";
+                }
+                showToast('管理者画面に切り替えました', 'fa-user-shield text-amber-400');
+            }
         }
 
         function showMainApp() {
@@ -1876,11 +1929,16 @@
             document.getElementById('headerUserName').textContent = currentUser.name;
             document.getElementById('headerUserRole').textContent = currentUser.role || (currentUser.isAdmin ? '管理者' : 'スタッフ');
 
-            if (currentUser.isAdmin) {
+            const switchBtn = document.getElementById('headerSwitchViewBtn');
+
+            // 1. 専用の管理者ログイン（147123またはID admin）からログインした場合のみ、直接管理者画面を表示
+            if (currentUser.id === 'admin') {
                 document.getElementById('staffView').classList.add('hidden');
                 document.getElementById('adminView').classList.remove('hidden');
                 setAdminSubTab('requests');
+                if (switchBtn) switchBtn.classList.add('hidden');
             } else {
+                // 2. スタッフID（1004等）と暗証番号でログインした場合は、役職に関わらず必ず「スタッフ画面（マイページ）」を表示
                 document.getElementById('adminView').classList.add('hidden');
                 document.getElementById('staffView').classList.remove('hidden');
                 refreshStaffCard();
@@ -1890,11 +1948,24 @@
                 document.getElementById('reqStartDate').value = today;
                 document.getElementById('reqEndDate').value = today;
                 handleReqTypeChange();
+
+                // 管理者権限を持つスタッフ（佐々木様等）のみ、管理者画面への切替ボタンを表示
+                if (isUserAdmin(currentUser)) {
+                    if (switchBtn) {
+                        switchBtn.classList.remove('hidden');
+                        switchBtn.classList.add('flex');
+                        switchBtn.innerHTML = `<i class="fa-solid fa-user-shield text-slate-900"></i> <span id="headerSwitchViewBtnText">管理者画面へ</span>`;
+                        switchBtn.className = "bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold px-3 py-2 rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer";
+                    }
+                } else {
+                    if (switchBtn) switchBtn.classList.add('hidden');
+                }
             }
 
             fetchLatestData().then(() => {
                 if (currentUser) {
-                    if (currentUser.isAdmin) {
+                    const isAdminVisible = !document.getElementById('adminView').classList.contains('hidden');
+                    if (isAdminVisible) {
                         if (activeAdminSubTab === 'requests') renderAdminRequests();
                         else if (activeAdminSubTab === 'staff') renderStaffTable();
                         else if (activeAdminSubTab === 'search') renderAdminSearchResults();
@@ -1907,9 +1978,9 @@
         }
 
         function refreshStaffCard() {
-            if (!currentUser || currentUser.isAdmin) return;
-            const staff = staffList.find(s => s.id === currentUser.id) || currentUser;
-            const totalRemaining = (staff.carriedOver + staff.currentGranted) - staff.used;
+            if (!currentUser || currentUser.id === 'admin') return;
+            const staff = staffList.find(s => String(s.id) === String(currentUser.id)) || currentUser;
+            const totalRemaining = (parseFloat(staff.carriedOver) || 0) + (parseFloat(staff.currentGranted) || 0) - (parseFloat(staff.used) || 0);
             
             document.getElementById('staffCardName').textContent = `${staff.name} 様`;
 
@@ -3060,7 +3131,7 @@
                         } else {
                             showToast(res.message || `${payload.name} さんの情報を更新しました`, 'fa-circle-check text-emerald-400');
                         }
-                        if (currentUser && currentUser.isAdmin) {
+                        if (currentUser && isUserAdmin(currentUser)) {
                             renderStaffTable();
                             initSearchFilters();
                         }
@@ -3083,7 +3154,7 @@
 
                 saveLocalData();
                 closeRegisterModal();
-                if (currentUser && currentUser.isAdmin) {
+                if (currentUser && isUserAdmin(currentUser)) {
                     renderStaffTable();
                     initSearchFilters();
                 }
