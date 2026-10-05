@@ -1618,13 +1618,36 @@
             return s;
         }
 
+        const CANONICAL_STAFF_ID_MAP = {
+            '吉田恭子': '1003',
+            '佐々木大介': '1004',
+            '小野早美': '1005',
+            '前田昌子': '1006',
+            '樋渡絵美': '1007',
+            '星さち': '1008',
+            '相田沙生': '1009',
+            '志田広幸': '1010',
+            '奈良孝子': '1011',
+            '園部彩': '1012',
+            '半井紀江': '1013',
+            '小林志歩': '1014',
+            '蛭田千明': '1015',
+            '平子由美': '1016',
+            '鈴木梓砂': '1017',
+            '長岡直美': '1018',
+            '斎藤美津子': '1022',
+            '齋藤美津子': '1022'
+        };
+
         function normalizeStaffItem(s) {
             if (!s) return null;
             const rawHire = s.hireDate || s.joinedDate || s.joinDate || '';
             const hireDate = normalizeDateToYmd(rawHire);
+            const cleanName = String(s.name || '').replace(/\s+/g, '');
+            const canonicalId = CANONICAL_STAFF_ID_MAP[cleanName] || String(s.id || '');
             return {
-                id: String(s.id),
-                name: String(s.name || ''),
+                id: canonicalId,
+                name: String(s.name || '').trim(),
                 role: String(s.role || '一般'),
                 pin: s.pin ? String(s.pin) : '0123',
                 hireDate: hireDate,
@@ -1633,8 +1656,29 @@
                 currentGranted: parseFloat(s.currentGranted) || 0,
                 used: parseFloat(s.used) || 0,
                 status: s.status || (s.isRetired ? '退職' : '在職'),
-                isAdmin: Boolean(s.isAdmin || s.role === '管理者' || s.id === '1004')
+                isAdmin: Boolean(s.isAdmin || s.role === '管理者' || canonicalId === '1004')
             };
+        }
+
+        function deduplicateStaffList(list) {
+            const map = new Map();
+            for (const item of list) {
+                if (!item || !item.id) continue;
+                if (!map.has(item.id)) {
+                    map.set(item.id, { ...item });
+                } else {
+                    const existing = map.get(item.id);
+                    // より完全な情報を優先維持（非初期パスワード、設定済み入社日等）
+                    map.set(item.id, {
+                        ...existing,
+                        ...item,
+                        pin: (existing.pin && existing.pin !== '0123') ? existing.pin : (item.pin || '0123'),
+                        hireDate: existing.hireDate || item.hireDate || '',
+                        joinedDate: existing.joinedDate || item.joinedDate || ''
+                    });
+                }
+            }
+            return Array.from(map.values());
         }
 
         function findStaffForRequest(r) {
@@ -1646,7 +1690,8 @@
             }
             const rId = String(r.staffId || '').trim();
             if (rId) {
-                const byId = staffList.find(s => String(s.id) === rId);
+                const canonicalRId = CANONICAL_STAFF_ID_MAP[rNameClean] || rId;
+                const byId = staffList.find(s => String(s.id) === canonicalRId || String(s.id) === rId);
                 if (byId) return byId;
             }
             return null;
@@ -1691,7 +1736,7 @@
                 loadTrackingCaches();
                 const s = localStorage.getItem('kusunoki_staff_data');
                 const r = localStorage.getItem('kusunoki_requests_data');
-                staffList = s ? JSON.parse(s).map(normalizeStaffItem) : [];
+                staffList = s ? deduplicateStaffList(JSON.parse(s).map(normalizeStaffItem)) : [];
                 const rawRequests = r ? JSON.parse(r) : [];
                 
                 requestList = rawRequests
@@ -1704,6 +1749,8 @@
                             const matchedStaff = staffList.find(st => String(st.name || '').replace(/\s+/g, '') === rNameClean);
                             if (matchedStaff) {
                                 item.staffId = matchedStaff.id;
+                            } else if (CANONICAL_STAFF_ID_MAP[rNameClean]) {
+                                item.staffId = CANONICAL_STAFF_ID_MAP[rNameClean];
                             }
                         }
                         return item;
@@ -1722,36 +1769,30 @@
             '1006': { id: '1006', name: '前田昌子', role: '清掃', pin: '1114', hireDate: '2026-06-22', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1007': { id: '1007', name: '樋渡絵美', role: '介護士', pin: '5825', hireDate: '2023-02-01', carriedOver: 5.5, currentGranted: 14.0, used: 0.0, status: '在職' },
             '1008': { id: '1008', name: '星さち', role: '事務', pin: '0123', hireDate: '2018-04-23', carriedOver: 0.0, currentGranted: 15.0, used: 0.0, status: '在職' },
-            '1009': { id: '1009', name: '相田 沙生', role: '介護士', pin: '0327', hireDate: '2026-06-16', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1009': { id: '1009', name: '相田沙生', role: '介護士', pin: '0327', hireDate: '2026-06-16', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1010': { id: '1010', name: '志田広幸', role: '介護士', pin: '3594', hireDate: '2026-04-06', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1011': { id: '1011', name: '奈良孝子', role: '清掃', pin: '0245', hireDate: '2026-08-23', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
             '1012': { id: '1012', name: '園部彩', role: '介護士', pin: '6221', hireDate: '2025-07-02', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1013': { id: '1013', name: '半井 紀江', role: '介護士', pin: '1232', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
+            '1013': { id: '1013', name: '半井紀江', role: '介護士', pin: '1232', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
             '1014': { id: '1014', name: '小林志歩', role: '介護士', pin: '2368', hireDate: '2024-11-18', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
             '1015': { id: '1015', name: '蛭田千明', role: '介護士', pin: '2229', hireDate: '2024-12-09', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
             '1016': { id: '1016', name: '平子由美', role: '介護士', pin: '4365', hireDate: '2024-04-01', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
             '1017': { id: '1017', name: '鈴木梓砂', role: '看護師', pin: '1129', hireDate: '2024-04-01', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
-            '1018': { id: '1018', name: '長岡 直美', role: '介護士', pin: '0123', hireDate: '2025-12-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1019': { id: '1019', name: '相田 沙生', role: '介護士', pin: '9211', hireDate: '2026-06-16', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
-            '1020': { id: '1020', name: '園部彩', role: '介護士', pin: '6221', hireDate: '2025-07-02', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1021': { id: '1021', name: '園部彩', role: '介護士', pin: '6221', hireDate: '2025-07-02', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
+            '1018': { id: '1018', name: '長岡直美', role: '介護士', pin: '0123', hireDate: '2025-12-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
             '1022': { id: '1022', name: '斎藤美津子', role: '事務', pin: '0123', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 12.0, used: 0.0, status: '在職' }
         };
 
         function ensureStaffListNotEmpty() {
             if (!staffList) staffList = [];
 
-            // スプレッドシートまたはローカルに既にデータがある場合は、スプレッドシートの値を最優先とし、勝手な上書きをしない
             if (staffList.length > 0) {
-                // 各スタッフデータの型とデフォルト項目を補正
-                staffList = staffList.map(normalizeStaffItem).filter(Boolean);
+                staffList = deduplicateStaffList(staffList.map(normalizeStaffItem).filter(Boolean));
                 saveLocalData();
                 return;
             }
 
-            // 万一スプレッドシートもローカルも完全に空（初期起動時）の場合のみ、初期マスタを展開
             const initialList = Object.values(DEFAULT_STAFF_MASTER).map(normalizeStaffItem);
-            staffList = initialList;
+            staffList = deduplicateStaffList(initialList);
             saveLocalData();
         }
 
