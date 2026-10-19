@@ -1538,9 +1538,29 @@
                 if (res && res.success) {
                     const rawStaffList = res.staffList || [];
                     if (rawStaffList.length > 0) {
-                        // スプレッドシートの各スタッフ項目を正規化して完全反映
-                        staffList = rawStaffList.map(s => normalizeStaffItem(s)).filter(Boolean);
+                        const localMap = new Map((staffList || []).map(s => [String(s.id), s]));
+                        const normalizedGas = rawStaffList.map(s => normalizeStaffItem(s)).filter(Boolean);
+                        
+                        staffList = normalizedGas.map(norm => {
+                            const local = localMap.get(String(norm.id));
+                            if (local) {
+                                // より大きい消化日数（承認済み直後の最新値）を優先保持
+                                const localUsed = parseFloat(local.used) || 0;
+                                const gasUsed = parseFloat(norm.used) || 0;
+                                if (localUsed > gasUsed) norm.used = localUsed;
+                            }
+                            return norm;
+                        });
                     }
+
+                    // DEFAULT_STAFF_MASTER に定義されているスタッフ（鴨勅様等）が未登録の場合は自動補完
+                    Object.values(DEFAULT_STAFF_MASTER).forEach(def => {
+                        const defNorm = normalizeStaffItem(def);
+                        if (!staffList.some(s => String(s.id) === String(defNorm.id) || String(s.name || '').replace(/\s+/g, '') === String(defNorm.name || '').replace(/\s+/g, ''))) {
+                            staffList.push(defNorm);
+                        }
+                    });
+                    staffList = deduplicateStaffList(staffList);
                     
                     const incomingRequests = res.requestList || [];
                     // 削除済み・処理済みステータスを優先マージし、同期による未処理への先祖返りを防止
@@ -1640,7 +1660,8 @@
             '阿部円香': '1023',
             '鴨勅光': '1020',
             '鴨勅': '1020',
-            '鴨': '1020'
+            '鴨': '1020',
+            '相澤美咲': '1025'
         };
 
         function normalizeStaffItem(s) {
@@ -1699,6 +1720,35 @@
                 if (byId) return byId;
             }
             return null;
+        }
+
+        // 承認済みの有休申請（全休・午前半休・午後半休）を動的集計し、実効消化日数を算出
+        function getStaffEffectiveUsed(staff) {
+            if (!staff) return 0;
+            const sId = String(staff.id || '').trim();
+            const sNameClean = String(staff.name || '').replace(/\s+/g, '');
+            
+            let approvedLeaveDays = 0;
+            (requestList || []).forEach(r => {
+                if (!r || !isApprovedStatus(r.status)) return;
+                const rType = String(r.type || '');
+                if (rType.includes('有給') || rType.includes('有休') || rType.includes('年休')) {
+                    const rStaff = findStaffForRequest(r);
+                    const isMatch = (rStaff && String(rStaff.id) === sId) ||
+                                    (sNameClean && String(r.staffName || '').replace(/\s+/g, '') === sNameClean) ||
+                                    (sId && String(r.staffId || '').trim() === sId);
+                    if (isMatch) {
+                        let d = parseFloat(r.days);
+                        if (isNaN(d) || d <= 0) {
+                            d = rType.includes('半休') ? 0.5 : 1.0;
+                        }
+                        approvedLeaveDays += d;
+                    }
+                }
+            });
+
+            const baseUsed = parseFloat(staff.used) || 0;
+            return parseFloat(Math.max(baseUsed, approvedLeaveDays).toFixed(1));
         }
 
         function loadTrackingCaches() {
@@ -1767,7 +1817,7 @@
         }
 
         const DEFAULT_STAFF_MASTER = {
-            '1003': { id: '1003', name: '吉田恭子', role: '介護士', pin: '0123', hireDate: '', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1003': { id: '1003', name: '吉田恭子', role: '介護士', pin: '1728', hireDate: '', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1004': { id: '1004', name: '佐々木大介', role: '管理者', pin: '7030', hireDate: '2017-04-10', carriedOver: 6.0, currentGranted: 20.0, used: 1.0, status: '在職' },
             '1005': { id: '1005', name: '小野早美', role: '看護師', pin: '9153', hireDate: '2026-04-01', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1006': { id: '1006', name: '前田昌子', role: '清掃', pin: '1114', hireDate: '2026-06-22', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
@@ -1785,7 +1835,8 @@
             '1018': { id: '1018', name: '長岡直美', role: '介護士', pin: '0123', hireDate: '2025-12-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
             '1020': { id: '1020', name: '鴨勅 光', role: '計画作成担当者', pin: '0123', hireDate: '2025-04-14', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
             '1022': { id: '1022', name: '斎藤美津子', role: '事務', pin: '0123', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 12.0, used: 0.0, status: '在職' },
-            '1023': { id: '1023', name: '阿部 円香', role: '介護士', pin: '0123', hireDate: '', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' }
+            '1023': { id: '1023', name: '阿部 円香', role: '介護士', pin: '0211', hireDate: '', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
+            '1025': { id: '1025', name: '相澤美咲', role: '介護士', pin: '8627', hireDate: '', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' }
         };
 
         function ensureStaffListNotEmpty() {
@@ -1864,10 +1915,28 @@
             if (btnText) btnText.textContent = "認証中...";
             if (btnIcon) btnIcon.className = "fa-solid fa-spinner fa-spin";
 
+            ensureStaffListNotEmpty();
+            const staff = staffList.find(s => normalizeNumber(s.id) === idInput);
+            const staffPinFormatted = staff ? normalizeNumber(staff.pin || '').padStart(4, '0') : '';
+            const inputPinFormatted = pinInput.padStart(4, '0');
+            const is1004ValidPin = (idInput === '1004' && (inputPinFormatted === '7030' || inputPinFormatted === '0730' || pinInput === '730' || pinInput === '7030'));
+
             if (isGasConfigured()) {
                 try {
                     const res = await apiCall("login", { isAdmin: false, id: idInput, pin: pinInput });
                     if (res && res.success) {
+                        // 【セキュリティ二重防御】GAS側が「0123」などの抜け道で誤って許可を返した場合でも、
+                        // スタッフ本人の正規の暗証番号と一致しない場合はフロント側で即座に拒否・ブロック！
+                        const realPin = normalizeNumber(res.user?.pin || staffPinFormatted).padStart(4, '0');
+                        const isPinMatched = (realPin === inputPinFormatted) || is1004ValidPin;
+                        
+                        if (!isPinMatched) {
+                            resetBtnState();
+                            if (errorMsg) errorMsg.textContent = '暗証番号が違います。';
+                            if (errorBox) errorBox.classList.remove('hidden');
+                            return;
+                        }
+
                         resetBtnState();
                         currentUser = res.user;
                         if (errorBox) errorBox.classList.add('hidden');
@@ -1882,20 +1951,16 @@
             }
 
             resetBtnState();
-            ensureStaffListNotEmpty();
 
-            const staff = staffList.find(s => normalizeNumber(s.id) === idInput);
             if (staff) {
                 if (staff.status === '退職') {
                     if (errorMsg) errorMsg.textContent = 'このアカウントは退職処理されているためログインできません。';
                     if (errorBox) errorBox.classList.remove('hidden');
                     return;
                 }
-                const staffPinFormatted = normalizeNumber(staff.pin || '').padStart(4, '0');
-                const inputPinFormatted = pinInput.padStart(4, '0');
-                // 1004（佐々木様）は 7030 と 0730（730）の双方の入力を許可
-                const is1004ValidPin = (idInput === '1004' && (inputPinFormatted === '7030' || inputPinFormatted === '0730' || pinInput === '730' || pinInput === '7030'));
-                if (staffPinFormatted === inputPinFormatted || is1004ValidPin || pinInput === '1234' || pinInput === '0000') {
+                
+                // 本人の暗証番号のみで厳格判定（デバッグ用抜け道 1234 や 0000 は完全撤廃）
+                if (staffPinFormatted === inputPinFormatted || is1004ValidPin) {
                     currentUser = staff;
                     if (errorBox) errorBox.classList.add('hidden');
                     clearLoginInputs();
@@ -2027,7 +2092,8 @@
         function refreshStaffCard() {
             if (!currentUser || currentUser.id === 'admin') return;
             const staff = staffList.find(s => String(s.id) === String(currentUser.id)) || currentUser;
-            const totalRemaining = (parseFloat(staff.carriedOver) || 0) + (parseFloat(staff.currentGranted) || 0) - (parseFloat(staff.used) || 0);
+            const effectiveUsed = getStaffEffectiveUsed(staff);
+            const totalRemaining = (parseFloat(staff.carriedOver) || 0) + (parseFloat(staff.currentGranted) || 0) - effectiveUsed;
             
             document.getElementById('staffCardName').textContent = `${staff.name} 様`;
 
@@ -2039,7 +2105,7 @@
             document.getElementById('staffCardTotalRemaining').textContent = Math.max(0, totalRemaining).toFixed(1);
             document.getElementById('staffCardCarriedOver').textContent = (staff.carriedOver || 0).toFixed(1);
             document.getElementById('staffCardCurrentGranted').textContent = (staff.currentGranted || 0).toFixed(1);
-            document.getElementById('staffCardUsed').textContent = (staff.used || 0).toFixed(1);
+            document.getElementById('staffCardUsed').textContent = effectiveUsed.toFixed(1);
         }
 
         function handleReqTypeChange() {
@@ -2407,7 +2473,14 @@
                 return;
             }
 
-            container.innerHTML = myReqs.map(r => {
+            // 新しい申請が上、古い申請が下になるよう降順ソート
+            const sortedReqs = [...myReqs].sort((a, b) => {
+                const diff = getRequestSortTimestamp(b) - getRequestSortTimestamp(a);
+                if (diff !== 0) return diff;
+                return String(b.id || '').localeCompare(String(a.id || ''), undefined, { numeric: true });
+            });
+
+            container.innerHTML = sortedReqs.map(r => {
                 let statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[11px] font-bold">申請中</span>';
                 if (r.status === '承認') statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[11px] font-bold">承認済み</span>';
                 if (r.status === '差し戻し') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full text-[11px] font-bold">差し戻し</span>';
@@ -2953,7 +3026,7 @@
 
             container.innerHTML = sorted.map(r => {
                 const staff = findStaffForRequest(r);
-                const remaining = staff ? ((staff.carriedOver + staff.currentGranted) - staff.used).toFixed(1) : '--';
+                const remaining = staff ? ((staff.carriedOver + staff.currentGranted) - getStaffEffectiveUsed(staff)).toFixed(1) : '--';
 
                 return `
                     <div class="border border-slate-200 rounded-xl p-4 bg-white shadow-sm hover:shadow transition space-y-3">
@@ -3048,7 +3121,8 @@
             }
 
             tbody.innerHTML = filtered.map(s => {
-                const remaining = ((s.carriedOver || 0) + (s.currentGranted || 0) - (s.used || 0)).toFixed(1);
+                const effectiveUsed = getStaffEffectiveUsed(s);
+                const remaining = ((s.carriedOver || 0) + (s.currentGranted || 0) - effectiveUsed).toFixed(1);
                 const isRetired = s.status === '退職';
                 
                 const statusBadge = isRetired
@@ -3068,7 +3142,7 @@
                         <td class="p-3 text-center font-bold text-amber-700"><span class="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">${hireInfo.grantMonth !== '--' ? hireInfo.grantMonth + '月' : '-'}</span></td>
                         <td class="p-3 text-right font-mono">${(s.carriedOver || 0).toFixed(1)}</td>
                         <td class="p-3 text-right font-mono">${(s.currentGranted || 0).toFixed(1)}</td>
-                        <td class="p-3 text-right font-mono text-rose-600">${(s.used || 0).toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono text-rose-600">${effectiveUsed.toFixed(1)}</td>
                         <td class="p-3 text-right font-mono font-bold text-teal-700">${remaining}</td>
                         <td class="p-3 text-center">
                             <div class="flex items-center justify-center space-x-1">
@@ -3352,11 +3426,34 @@
             if (req) {
                 req.status = targetStatus;
                 if (selectedAction === 'approve') {
-                    if (req.type.includes('有給休暇') || req.type.includes('有給届')) {
-                        const staff = staffList.find(s => s.id === req.staffId);
-                        if (staff) staff.used += req.days;
+                    const rType = String(req.type || '');
+                    if (rType.includes('有給') || rType.includes('有休') || rType.includes('年休')) {
+                        const staff = findStaffForRequest(req);
+                        if (staff) {
+                            let leaveDays = parseFloat(req.days);
+                            if (isNaN(leaveDays) || leaveDays <= 0) {
+                                leaveDays = rType.includes('半休') ? 0.5 : 1.0;
+                            }
+                            staff.used = parseFloat(((parseFloat(staff.used) || 0) + leaveDays).toFixed(1));
+
+                            // スプレッドシート（GAS）側にも有休消化日数の更新を送信
+                            if (isGasConfigured()) {
+                                apiCall("updateStaff", {
+                                    id: staff.id,
+                                    name: staff.name,
+                                    role: staff.role,
+                                    pin: staff.pin,
+                                    hireDate: staff.hireDate,
+                                    joinedDate: staff.hireDate,
+                                    carriedOver: staff.carriedOver,
+                                    currentGranted: staff.currentGranted,
+                                    used: staff.used,
+                                    status: staff.status
+                                }).catch(() => {});
+                            }
+                        }
                     }
-                    showToast('申請を承認しました（月別照会へ移動しました）');
+                    showToast('申請を承認しました（有給残数を引きました）');
                 } else if (selectedAction === 'remand') {
                     req.remandComment = comment;
                     showToast('差し戻し処理を完了しました');
