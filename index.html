@@ -418,6 +418,11 @@
                                     <option value="差し戻し">差し戻し中</option>
                                     <option value="却下">却下済み</option>
                                 </select>
+                                <label class="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 rounded-xl px-2.5 py-1.5 text-xs font-bold cursor-pointer select-none shadow-sm transition" title="チェックを入れると確認画面を省略し、緑の『承認』ボタンを押した瞬間に0秒で即時承認されます">
+                                    <input type="checkbox" id="quickApproveToggle" onchange="toggleQuickApproveMode(this.checked)" class="accent-teal-600 rounded cursor-pointer">
+                                    <i class="fa-solid fa-bolt text-amber-500 text-xs"></i>
+                                    <span>1クリック即時承認</span>
+                                </label>
                             </div>
                         </div>
 
@@ -1188,6 +1193,67 @@
             return s;
         }
 
+        // 申請日時を日本表記（YYYY年M月D日 HH:mm）に変換するフォーマッター
+        function formatJapaneseDateTime(dateVal) {
+            if (!dateVal) return '';
+            const s = String(dateVal).trim();
+            if (!s) return '';
+
+            const cleanStr = s.replace(/\([^)]*\)/g, '').trim();
+
+            // 英語日付形式 (例: Tue Sep 15 2026 20:13:29 GMT+0900)
+            const engMatch = cleanStr.match(/([A-Za-z]{3})\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+            if (engMatch) {
+                const months = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+                const m = months[engMatch[2]] || 1;
+                const d = parseInt(engMatch[3], 10);
+                const y = parseInt(engMatch[4], 10);
+                const hh = String(parseInt(engMatch[5], 10)).padStart(2, '0');
+                const mm = String(parseInt(engMatch[6], 10)).padStart(2, '0');
+                return `${y}年${m}月${d}日 ${hh}:${mm}`;
+            }
+
+            // ISO/スラッシュ/ハイフン形式 (例: 2026-09-15 20:13:29 or 2026/9/15 8:05)
+            const isoMatch = cleanStr.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+            if (isoMatch) {
+                const y = parseInt(isoMatch[1], 10);
+                const m = parseInt(isoMatch[2], 10);
+                const d = parseInt(isoMatch[3], 10);
+                if (isoMatch[4] !== undefined && isoMatch[5] !== undefined) {
+                    const hh = String(parseInt(isoMatch[4], 10)).padStart(2, '0');
+                    const mm = String(parseInt(isoMatch[5], 10)).padStart(2, '0');
+                    return `${y}年${m}月${d}日 ${hh}:${mm}`;
+                }
+                return `${y}年${m}月${d}日`;
+            }
+
+            // 既に「YYYY年M月D日 HH:mm」形式の場合
+            const jpMatch = cleanStr.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}):(\d{1,2}))?/);
+            if (jpMatch) {
+                const y = parseInt(jpMatch[1], 10);
+                const m = parseInt(jpMatch[2], 10);
+                const d = parseInt(jpMatch[3], 10);
+                if (jpMatch[4] !== undefined && jpMatch[5] !== undefined) {
+                    const hh = String(parseInt(jpMatch[4], 10)).padStart(2, '0');
+                    const mm = String(parseInt(jpMatch[5], 10)).padStart(2, '0');
+                    return `${y}年${m}月${d}日 ${hh}:${mm}`;
+                }
+                return `${y}年${m}月${d}日`;
+            }
+
+            const dt = new Date(cleanStr);
+            if (!isNaN(dt.getTime())) {
+                const y = dt.getFullYear();
+                const m = dt.getMonth() + 1;
+                const d = dt.getDate();
+                const hh = String(dt.getHours()).padStart(2, '0');
+                const mm = String(dt.getMinutes()).padStart(2, '0');
+                return `${y}年${m}月${d}日 ${hh}:${mm}`;
+            }
+
+            return s;
+        }
+
         // 開始日・終了日を日本方式の期間文字列に変換
         function formatJpPeriod(startDate, endDate) {
             const startJp = formatToJapaneseDateStr(startDate);
@@ -1506,7 +1572,8 @@
                 const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action, ...payload })
+                    // actionプロパティがpayloadによって上書きされないよう明示的にactionを最優先
+                    body: JSON.stringify({ ...payload, action })
                 });
                 const text = await response.text();
                 try {
@@ -1565,6 +1632,22 @@
                     const incomingRequests = res.requestList || [];
                     // 削除済み・処理済みステータスを優先マージし、同期による未処理への先祖返りを防止
                     loadTrackingCaches();
+                    // ローカルキャッシュに処理済みの記録があり、GASスプレッドシート側が未処理のものは自動的にGASへ更新同期
+                    if (processedRequestMap && processedRequestMap.size > 0 && isGasConfigured()) {
+                        incomingRequests.forEach(r => {
+                            const cached = processedRequestMap.get(String(r.id));
+                            if (cached && cached.status && r.status !== cached.status) {
+                                apiCall("processRequest", {
+                                    reqId: r.id,
+                                    id: r.id,
+                                    status: cached.status,
+                                    actionType: cached.status === '承認' ? 'approve' : cached.status === '差し戻し' ? 'remand' : 'reject',
+                                    reqAction: cached.status === '承認' ? 'approve' : cached.status === '差し戻し' ? 'remand' : 'reject',
+                                    comment: cached.remandComment || ''
+                                }).catch(() => {});
+                            }
+                        });
+                    }
                     requestList = incomingRequests
                         .filter(r => !deletedRequestIds.has(String(r.id)))
                         .map(r => {
@@ -2908,6 +2991,20 @@
             if (!r) return 0;
             if (r.createdAt) {
                 const s = String(r.createdAt).replace(/[年月日]/g, '-').replace(/\s+/g, ' ').trim();
+                const clean = String(r.createdAt).replace(/\([^)]*\)/g, '').trim();
+                const tClean = Date.parse(clean);
+                if (!isNaN(tClean) && tClean) return tClean;
+                const engMatch = clean.match(/([A-Za-z]{3})\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+                if (engMatch) {
+                    const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+                    const m = months[engMatch[2]] || 0;
+                    const d = parseInt(engMatch[3], 10);
+                    const y = parseInt(engMatch[4], 10);
+                    const hh = parseInt(engMatch[5], 10);
+                    const mm = parseInt(engMatch[6], 10);
+                    const ss = parseInt(engMatch[7] || 0, 10);
+                    return new Date(y, m, d, hh, mm, ss).getTime();
+                }
                 const t = Date.parse(s);
                 if (!isNaN(t)) return t;
                 const m = s.match(/\d+/g);
@@ -2959,6 +3056,7 @@
         function renderAdminRequests() {
             const container = document.getElementById('adminRequestList');
             if (!container) return;
+            initQuickApproveToggle();
 
             const filter = document.getElementById('adminStatusFilter') ? document.getElementById('adminStatusFilter').value : 'ALL';
             const sortOrderEl = document.getElementById('adminSortFilter');
@@ -3036,7 +3134,7 @@
                                 <span class="bg-slate-100 text-slate-600 text-[11px] px-2 py-0.5 rounded-full">有休残: ${remaining}日</span>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <span class="text-xs text-slate-400">${r.createdAt || ''}</span>
+                                <span class="text-xs text-slate-400 font-medium" title="申請日時">${formatJapaneseDateTime(r.createdAt)}</span>
                                 <button onclick="confirmDeleteRequest('${r.id}')" class="text-slate-400 hover:text-rose-600 text-xs px-1.5 py-0.5 rounded transition" title="申請データを削除">
                                     <i class="fa-solid fa-trash-can"></i>
                                 </button>
@@ -3365,9 +3463,32 @@
             );
         }
 
+        function isQuickApproveEnabled() {
+            return localStorage.getItem('kusunoki_quick_approve') === 'true';
+        }
+
+        function toggleQuickApproveMode(enabled) {
+            localStorage.setItem('kusunoki_quick_approve', enabled ? 'true' : 'false');
+            showToast(enabled ? '1クリック即時承認モードをONにしました' : '確認画面を表示するモードにしました');
+        }
+
+        function initQuickApproveToggle() {
+            const toggle = document.getElementById('quickApproveToggle');
+            if (toggle) {
+                toggle.checked = isQuickApproveEnabled();
+            }
+        }
+
         function openActionModal(reqId, action) {
             selectedRequestId = reqId;
             selectedAction = action;
+
+            // 「1クリック即時承認」が有効で、承認ボタンが押された場合は確認モーダルを省略して0秒即時承認
+            if (action === 'approve' && isQuickApproveEnabled()) {
+                executeReqAction();
+                return;
+            }
+
             const title = document.getElementById('actionModalTitle');
             const desc = document.getElementById('actionModalDesc');
             const commentGroup = document.getElementById('remandCommentGroup');
@@ -3377,20 +3498,30 @@
                 title.textContent = '申請の承認';
                 desc.textContent = 'この届出を承認しますか？有休申請の場合は消化日数が自動的に引かれます。';
                 commentGroup.classList.add('hidden');
-                confirmBtn.className = 'flex-1 bg-teal-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+                confirmBtn.className = 'flex-1 bg-teal-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-teal-700 transition cursor-pointer';
             } else if (action === 'remand') {
                 title.textContent = '申請の差し戻し';
                 desc.textContent = 'スタッフへ修正依頼の差し戻しを行います。';
                 commentGroup.classList.remove('hidden');
-                confirmBtn.className = 'flex-1 bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+                confirmBtn.className = 'flex-1 bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-amber-700 transition cursor-pointer';
             } else if (action === 'reject') {
                 title.textContent = '申請の却下';
                 desc.textContent = 'この届出を却下します。';
                 commentGroup.classList.add('hidden');
-                confirmBtn.className = 'flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow';
+                confirmBtn.className = 'flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-xl text-xs shadow hover:bg-rose-700 transition cursor-pointer';
             }
 
             document.getElementById('actionModal').classList.remove('hidden');
+
+            // 自動フォーカス（Enterキーですぐに確定可能）
+            setTimeout(() => {
+                if (action === 'remand') {
+                    const commentInput = document.getElementById('remandComment');
+                    if (commentInput) commentInput.focus();
+                } else if (confirmBtn) {
+                    confirmBtn.focus();
+                }
+            }, 50);
         }
 
         function closeActionModal() {
@@ -3410,22 +3541,24 @@
                 'reject': '却下'
             };
             const targetStatus = actionStatusMap[selectedAction] || selectedAction;
+            const targetReqId = selectedRequestId;
+            const targetAction = selectedAction;
 
-            // 同期時にGASから「申請中」で再取得されても復活しないようステータスを固定キャッシュ
-            processedRequestMap.set(String(selectedRequestId), {
+            // ① モーダルを直ちに閉じる（待ち時間0秒化）
+            closeActionModal();
+
+            // ② キャッシュとローカルメモリを即時更新
+            processedRequestMap.set(String(targetReqId), {
                 status: targetStatus,
                 remandComment: comment
             });
             saveTrackingCaches();
 
-            if (isGasConfigured()) {
-                await apiCall("processRequest", { reqId: selectedRequestId, action: selectedAction, comment });
-            }
-
-            const req = requestList.find(r => String(r.id) === String(selectedRequestId));
+            const req = requestList.find(r => String(r.id) === String(targetReqId));
+            let staffToUpdate = null;
             if (req) {
                 req.status = targetStatus;
-                if (selectedAction === 'approve') {
+                if (targetAction === 'approve') {
                     const rType = String(req.type || '');
                     if (rType.includes('有給') || rType.includes('有休') || rType.includes('年休')) {
                         const staff = findStaffForRequest(req);
@@ -3435,38 +3568,56 @@
                                 leaveDays = rType.includes('半休') ? 0.5 : 1.0;
                             }
                             staff.used = parseFloat(((parseFloat(staff.used) || 0) + leaveDays).toFixed(1));
-
-                            // スプレッドシート（GAS）側にも有休消化日数の更新を送信
-                            if (isGasConfigured()) {
-                                apiCall("updateStaff", {
-                                    id: staff.id,
-                                    name: staff.name,
-                                    role: staff.role,
-                                    pin: staff.pin,
-                                    hireDate: staff.hireDate,
-                                    joinedDate: staff.hireDate,
-                                    carriedOver: staff.carriedOver,
-                                    currentGranted: staff.currentGranted,
-                                    used: staff.used,
-                                    status: staff.status
-                                }).catch(() => {});
-                            }
+                            staffToUpdate = staff;
                         }
                     }
-                    showToast('申請を承認しました（有給残数を引きました）');
-                } else if (selectedAction === 'remand') {
+                    showToast(`${escapeHtml(req.staffName || '')}さんの申請を承認しました`);
+                } else if (targetAction === 'remand') {
                     req.remandComment = comment;
                     showToast('差し戻し処理を完了しました');
-                } else if (selectedAction === 'reject') {
+                } else if (targetAction === 'reject') {
                     showToast('申請を却下しました', 'fa-circle-xmark text-rose-400');
                 }
                 saveLocalData();
             }
 
-            closeActionModal();
+            // ③ 画面のカード一覧を即座に再描画（0.01秒で「承認済み」へ切り替え）
             renderAdminRequests();
             if (activeAdminSubTab === 'search') {
                 renderAdminSearchResults();
+            }
+
+            // ④ Googleスプレッドシート（GAS）への同期書き込みは裏側（非同期）で即時送信
+            if (isGasConfigured()) {
+                apiCall("processRequest", {
+                    reqId: targetReqId,
+                    id: targetReqId,
+                    status: targetStatus,
+                    actionType: targetAction,
+                    reqAction: targetAction,
+                    comment
+                }).then(res => {
+                    if (res && res.success) {
+                        updateSyncBadge(true);
+                    }
+                }).catch(err => {
+                    console.error("GAS processRequest background error:", err);
+                });
+
+                if (staffToUpdate) {
+                    apiCall("updateStaff", {
+                        id: staffToUpdate.id,
+                        name: staffToUpdate.name,
+                        role: staffToUpdate.role,
+                        pin: staffToUpdate.pin,
+                        hireDate: staffToUpdate.hireDate,
+                        joinedDate: staffToUpdate.hireDate,
+                        carriedOver: staffToUpdate.carriedOver,
+                        currentGranted: staffToUpdate.currentGranted,
+                        used: staffToUpdate.used,
+                        status: staffToUpdate.status
+                    }).catch(err => console.error("GAS updateStaff background error:", err));
+                }
             }
         }
 
