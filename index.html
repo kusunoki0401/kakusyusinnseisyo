@@ -943,11 +943,25 @@
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">入社年月日 <span class="text-red-500">*</span></label>
-                    <input type="date" id="regHireDate" required onchange="autoCalcGrantDays()" class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
+                    <div class="flex gap-2 items-center">
+                        <input type="date" id="regHireDate" required class="flex-1 border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
+                        <button type="button" onclick="autoCalcGrantDays()" class="shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-3 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-slate-300" title="入社日から法定付与日数を自動計算">
+                            <i class="fa-solid fa-calculator text-teal-600"></i> 法定計算
+                        </button>
+                    </div>
                     <p class="text-[11px] text-slate-500 mt-1">※ 入社日に基づき法定付与日数を自動計算します。</p>
                 </div>
 
                 <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 space-y-3">
+                    <div class="flex justify-between items-center bg-amber-100/70 p-2 rounded-lg border border-amber-300">
+                        <div class="text-[11px] text-amber-900 font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-arrows-rotate text-amber-700"></i>
+                            <span>付与月が来たら:</span>
+                        </div>
+                        <button type="button" onclick="executeRegisterModalAnnualReset()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded text-[11px] shadow-sm transition flex items-center gap-1">
+                            <i class="fa-solid fa-rotate"></i> 付与月リセット（繰越移動＆消化0化）
+                        </button>
+                    </div>
                     <div class="flex justify-between items-center">
                         <h4 class="text-xs font-bold text-amber-800 flex items-center gap-1">
                             <i class="fa-solid fa-calculator"></i> 年途中導入・現在の有休初期設定
@@ -981,7 +995,140 @@
     </div>
 
     <!-- 審査モーダル -->
-    <div id="actionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <!-- 有休残日数・付与クイック調整モーダル（付与月リセット対応） -->
+    <div id="leaveDaysModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 fade-in max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                    <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-calendar-days text-base"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-base text-slate-800">有休残日数・付与の調整</h3>
+                        <p class="text-[11px] text-slate-500">前年繰越・今年度付与の編集や付与月の年次リセットを行います</p>
+                    </div>
+                </div>
+                <button onclick="closeLeaveDaysModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none">&times;</button>
+            </div>
+
+            <!-- スタッフ情報バー -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                    <span id="quickStaffId" class="font-mono text-xs font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">ID: ----</span>
+                    <span id="quickStaffName" class="font-bold text-slate-800 ml-2 text-sm">--</span>
+                    <span id="quickStaffRole" class="text-xs text-slate-500 ml-1">(--)</span>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] text-slate-400">入社日 / 勤続</p>
+                    <p id="quickStaffHireInfo" class="text-xs font-bold text-slate-700">--</p>
+                </div>
+            </div>
+
+            <!-- 付与月リセット（年度更新）カード -->
+            <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-xl p-3.5 space-y-2">
+                <div class="flex justify-between items-center">
+                    <h4 class="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrows-rotate text-amber-600"></i>
+                        <span>付与月の年次更新（リセット）</span>
+                    </h4>
+                    <span id="quickGrantMonthBadge" class="bg-amber-200 text-amber-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">付与月: --月</span>
+                </div>
+                <p class="text-[11px] text-amber-800 leading-relaxed">
+                    今年度余った有給を<strong>前年繰越</strong>へ移動し、<strong>今年度付与</strong>を新規付与して、<strong>消化済を 0.0 日に確実にリセット</strong>します。<br>
+                    <span class="text-[10px] text-amber-700 font-semibold">※過去月の消化履歴が復活する現象を完全に防止します。</span>
+                </p>
+                <div class="pt-1">
+                    <button type="button" onclick="executeAnnualLeaveReset()" class="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold py-2.5 px-3 rounded-lg text-xs shadow transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-rotate text-xs"></i>
+                        <span>このスタッフの付与月リセットを計算・反映</span>
+                    </button>
+                </div>
+            </div>
+
+            <form onsubmit="handleQuickLeaveSave(event)" class="space-y-4">
+                <input type="hidden" id="quickStaffTargetId">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-amber-50/60 border border-amber-200 rounded-xl p-3">
+                        <label class="block text-xs font-bold text-amber-900 mb-1 flex items-center justify-between">
+                            <span>前年繰越</span>
+                            <span class="text-[10px] text-amber-700 font-normal">昨年度の余り</span>
+                        </label>
+                        <div class="flex items-center gap-1">
+                            <input type="number" step="0.5" min="0" max="40" id="quickCarriedOver" required oninput="calcQuickLeavePreview()" class="w-full border border-amber-300 rounded-lg p-2.5 text-right font-mono font-bold text-slate-800 text-base focus:ring-2 focus:ring-amber-500">
+                            <span class="text-xs font-bold text-slate-600 shrink-0">日</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-teal-50/60 border border-teal-200 rounded-xl p-3">
+                        <label class="block text-xs font-bold text-teal-900 mb-1 flex items-center justify-between">
+                            <span>今年度付与</span>
+                            <span class="text-[10px] text-teal-700 font-normal">今年新たに付与</span>
+                        </label>
+                        <div class="flex items-center gap-1">
+                            <input type="number" step="0.5" min="0" max="40" id="quickCurrentGranted" required oninput="calcQuickLeavePreview()" class="w-full border border-teal-300 rounded-lg p-2.5 text-right font-mono font-bold text-teal-800 text-base focus:ring-2 focus:ring-teal-500">
+                            <span class="text-xs font-bold text-slate-600 shrink-0">日</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 法定付与基準クイックボタン -->
+                <div class="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 text-xs">
+                    <span class="text-slate-600 flex items-center gap-1">
+                        <i class="fa-solid fa-calculator text-slate-400"></i> 法定基準:
+                    </span>
+                    <button type="button" onclick="applyLegalGrantToQuickModal()" class="text-teal-700 hover:text-teal-800 font-bold hover:underline flex items-center gap-1">
+                        <span id="quickLegalGrantLabel">勤続年数から法定付与をセット</span>
+                        <i class="fa-solid fa-arrow-turn-up text-[10px]"></i>
+                    </button>
+                </div>
+
+                <!-- 計算プレビューカード（Excelのように内訳がひと目でわかる） -->
+                <div class="bg-gradient-to-br from-slate-800 to-slate-900 text-white rounded-xl p-4 space-y-3">
+                    <div class="flex justify-between items-center text-xs text-slate-300 border-b border-slate-700 pb-2">
+                        <div>
+                            <span>消化済日数（当年度サイクル計）</span>
+                            <span id="quickResetDateNotice" class="text-[10px] text-teal-300 block"></span>
+                        </div>
+                        <span class="font-mono font-bold text-rose-300 text-sm"><span id="quickUsedDays">0.0</span> 日</span>
+                    </div>
+
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <p class="text-[11px] text-teal-300 font-bold uppercase tracking-wider">最新の有休残日数</p>
+                            <p class="text-[10px] text-slate-400">（前年繰越 ＋ 今年度付与 － 消化済）</p>
+                        </div>
+                        <div class="text-right">
+                            <span id="quickTotalRemaining" class="text-2xl font-black font-mono text-emerald-400">0.0</span>
+                            <span class="text-xs font-bold text-slate-300 ml-1">日</span>
+                        </div>
+                    </div>
+
+                    <!-- 優先消化内訳 -->
+                    <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/80 text-[11px]">
+                        <div class="bg-slate-800/80 p-2 rounded border border-slate-700">
+                            <span class="text-slate-400 block text-[10px]">繰越分の残（優先消化）</span>
+                            <span id="quickCarriedRemaining" class="font-bold text-amber-300 font-mono">0.0 日</span>
+                        </div>
+                        <div class="bg-slate-800/80 p-2 rounded border border-slate-700">
+                            <span class="text-slate-400 block text-[10px]">今年度付与の残</span>
+                            <span id="quickGrantedRemaining" class="font-bold text-teal-300 font-mono">0.0 日</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-1 flex gap-3">
+                    <button type="button" onclick="closeLeaveDaysModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-xl transition text-xs">キャンセル</button>
+                    <button type="submit" id="quickLeaveSubmitBtn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl shadow transition text-xs flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>保存してスプレッドシートに反映</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<div id="actionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 fade-in">
             <h3 id="actionModalTitle" class="font-bold text-lg text-slate-800">申請の判定</h3>
             <p id="actionModalDesc" class="text-xs text-slate-600">処理を確定してください。</p>
@@ -1756,7 +1903,7 @@
             return {
                 id: canonicalId,
                 name: String(s.name || '').trim(),
-                role: String(s.role || '一般'),
+                role: String(s.role || '介護士'),
                 pin: s.pin ? String(s.pin) : '0123',
                 hireDate: hireDate,
                 joinedDate: hireDate,
@@ -1764,6 +1911,7 @@
                 currentGranted: parseFloat(s.currentGranted) || 0,
                 used: parseFloat(s.used) || 0,
                 status: s.status || (s.isRetired ? '退職' : '在職'),
+                usedResetDate: s.usedResetDate || getStaffResetDate(canonicalId) || '',
                 isAdmin: Boolean(s.isAdmin || s.role === '管理者' || canonicalId === '1004')
             };
         }
@@ -1772,17 +1920,33 @@
             const map = new Map();
             for (const item of list) {
                 if (!item || !item.id) continue;
-                if (!map.has(item.id)) {
-                    map.set(item.id, { ...item });
+                const sId = String(item.id);
+                if (!map.has(sId)) {
+                    map.set(sId, { ...item, id: sId });
                 } else {
-                    const existing = map.get(item.id);
-                    // より完全な情報を優先維持（非初期パスワード、設定済み入社日等）
-                    map.set(item.id, {
+                    const existing = map.get(sId);
+                    // 0より大きい有効な数値や、設定済み入社日・PINを優先保持
+                    const carriedOver = (parseFloat(existing.carriedOver) || 0) > 0 
+                        ? parseFloat(existing.carriedOver) 
+                        : (parseFloat(item.carriedOver) || 0);
+                    const currentGranted = (parseFloat(existing.currentGranted) || 0) > 0 
+                        ? parseFloat(existing.currentGranted) 
+                        : (parseFloat(item.currentGranted) || 0);
+                    const used = Math.max(parseFloat(existing.used) || 0, parseFloat(item.used) || 0);
+                    const hireDate = existing.hireDate || item.hireDate || existing.joinedDate || item.joinedDate || '';
+                    const pin = (existing.pin && existing.pin !== '0123') ? existing.pin : (item.pin || '0123');
+
+                    map.set(sId, {
                         ...existing,
                         ...item,
-                        pin: (existing.pin && existing.pin !== '0123') ? existing.pin : (item.pin || '0123'),
-                        hireDate: existing.hireDate || item.hireDate || '',
-                        joinedDate: existing.joinedDate || item.joinedDate || ''
+                        id: sId,
+                        carriedOver,
+                        currentGranted,
+                        used,
+                        hireDate,
+                        joinedDate: hireDate,
+                        pin,
+                        usedResetDate: existing.usedResetDate || item.usedResetDate || getStaffResetDate(sId) || ''
                     });
                 }
             }
@@ -1806,24 +1970,53 @@
         }
 
         // 承認済みの有休申請（全休・午前半休・午後半休）を動的集計し、実効消化日数を算出
+        function getStaffResetDate(staffId) {
+            try {
+                const map = JSON.parse(localStorage.getItem('kusunoki_staff_reset_dates') || '{}');
+                return map[String(staffId)] || '';
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function setStaffResetDate(staffId, resetDate) {
+            try {
+                const map = JSON.parse(localStorage.getItem('kusunoki_staff_reset_dates') || '{}');
+                map[String(staffId)] = resetDate;
+                localStorage.setItem('kusunoki_staff_reset_dates', JSON.stringify(map));
+            } catch (e) {
+                console.error('Error saving reset date:', e);
+            }
+        }
+
+        // 承認済みの有休申請（全休・午前半休・午後半休）を動的集計・算出（リセット基準日以降のみ集計）
         function getStaffEffectiveUsed(staff) {
             if (!staff) return 0;
             const sId = String(staff.id || '').trim();
             const sNameClean = String(staff.name || '').replace(/\s+/g, '');
+            const resetDateStr = staff.usedResetDate || getStaffResetDate(sId) || '';
             
             let approvedLeaveDays = 0;
             (requestList || []).forEach(r => {
                 if (!r || !isApprovedStatus(r.status)) return;
                 const rType = String(r.type || '');
-                if (rType.includes('有給') || rType.includes('有休') || rType.includes('年休')) {
+                if (rType.includes('有休') || rType.includes('有給') || rType.includes('年休')) {
                     const rStaff = findStaffForRequest(r);
                     const isMatch = (rStaff && String(rStaff.id) === sId) ||
                                     (sNameClean && String(r.staffName || '').replace(/\s+/g, '') === sNameClean) ||
                                     (sId && String(r.staffId || '').trim() === sId);
                     if (isMatch) {
+                        // リセット基準日が設定されている場合、それ以前の過去申請は新年度の消化済に含めない！
+                        if (resetDateStr) {
+                            const reqDate = r.startDate || r.createdAt || '';
+                            const reqYmd = normalizeDateToYmd(reqDate);
+                            if (reqYmd && reqYmd < resetDateStr) {
+                                return; // 過去年度の申請なので除外
+                            }
+                        }
                         let d = parseFloat(r.days);
                         if (isNaN(d) || d <= 0) {
-                            d = rType.includes('半休') ? 0.5 : 1.0;
+                            d = rType.includes('半') ? 0.5 : 1.0;
                         }
                         approvedLeaveDays += d;
                     }
@@ -1900,7 +2093,7 @@
         }
 
         const DEFAULT_STAFF_MASTER = {
-            '1003': { id: '1003', name: '吉田恭子', role: '介護士', pin: '1728', hireDate: '', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
+            '1003': { id: '1003', name: '吉田恭子', role: '介護士', pin: '1728', hireDate: '2026-09-15', carriedOver: 5.0, currentGranted: 10.0, used: 0.0, status: '在職' },
             '1004': { id: '1004', name: '佐々木大介', role: '管理者', pin: '7030', hireDate: '2017-04-10', carriedOver: 6.0, currentGranted: 20.0, used: 1.0, status: '在職' },
             '1005': { id: '1005', name: '小野早美', role: '看護師', pin: '9153', hireDate: '2026-04-01', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
             '1006': { id: '1006', name: '前田昌子', role: '清掃', pin: '1114', hireDate: '2026-06-22', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
@@ -3228,6 +3421,10 @@
                     : `<span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">在職</span>`;
 
                 const hireInfo = formatJapaneseDate(s.hireDate);
+                const carriedOverVal = (parseFloat(s.carriedOver) || 0);
+                const currentGrantedVal = (parseFloat(s.currentGranted) || 0);
+                const carriedRemaining = Math.max(0, carriedOverVal - effectiveUsed).toFixed(1);
+                const grantedRemaining = Math.max(0, currentGrantedVal - Math.max(0, effectiveUsed - carriedOverVal)).toFixed(1);
 
                 return `
                     <tr class="hover:bg-slate-50 transition border-b border-slate-100 ${isRetired ? 'bg-slate-50/70 text-slate-500' : ''}">
@@ -3238,17 +3435,28 @@
                         <td class="p-3 text-slate-600 font-medium">${s.hireDate || '-'}</td>
                         <td class="p-3 text-slate-700 font-bold">${hireInfo.durationText}</td>
                         <td class="p-3 text-center font-bold text-amber-700"><span class="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">${hireInfo.grantMonth !== '--' ? hireInfo.grantMonth + '月' : '-'}</span></td>
-                        <td class="p-3 text-right font-mono">${(s.carriedOver || 0).toFixed(1)}</td>
-                        <td class="p-3 text-right font-mono">${(s.currentGranted || 0).toFixed(1)}</td>
-                        <td class="p-3 text-right font-mono text-rose-600">${effectiveUsed.toFixed(1)}</td>
-                        <td class="p-3 text-right font-mono font-bold text-teal-700">${remaining}</td>
+                        <td class="p-3 text-right font-mono cursor-pointer hover:bg-amber-100/80 group transition" onclick="openLeaveDaysModal('${s.id}')" title="クリックして前年繰越・付与日数を調整">
+                            <span class="border-b border-dashed border-amber-500 font-bold group-hover:text-amber-800 text-slate-800">${carriedOverVal.toFixed(1)}</span>
+                            <i class="fa-solid fa-pen text-[9px] text-slate-300 group-hover:text-amber-600 ml-1"></i>
+                        </td>
+                        <td class="p-3 text-right font-mono cursor-pointer hover:bg-teal-100/80 group transition" onclick="openLeaveDaysModal('${s.id}')" title="クリックして前年繰越・付与日数を調整">
+                            <span class="border-b border-dashed border-teal-500 font-bold group-hover:text-teal-800 text-teal-900">${currentGrantedVal.toFixed(1)}</span>
+                            <i class="fa-solid fa-pen text-[9px] text-slate-300 group-hover:text-teal-600 ml-1"></i>
+                        </td>
+                        <td class="p-3 text-right font-mono text-rose-600 font-medium">${effectiveUsed.toFixed(1)}</td>
+                        <td class="p-3 text-right font-mono font-bold text-teal-700" title="内訳: 繰越残 ${carriedRemaining}日 / 当年残 ${grantedRemaining}日">
+                            <span>${remaining}</span>
+                        </td>
                         <td class="p-3 text-center">
                             <div class="flex items-center justify-center space-x-1">
-                                <button onclick="editStaff('${s.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-[11px] transition" title="編集">編集</button>
+                                <button onclick="openLeaveDaysModal('${s.id}')" class="bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-300 px-2 py-1 rounded text-[11px] font-bold transition flex items-center gap-1 shadow-sm" title="有休残日数・付与の調整">
+                                    <i class="fa-solid fa-calendar-days text-[10px]"></i> 有休調整
+                                </button>
+                                <button onclick="editStaff('${s.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded text-[11px] transition" title="スタッフ基本情報の編集">編集</button>
                                 ${isRetired ? `
-                                    <button onclick="confirmToggleRetire('${s.id}', '在職')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded text-[11px] transition" title="復職処理">復職</button>
+                                    <button onclick="confirmToggleRetire('${s.id}', '在職')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded text-[11px] transition" title="復職">復職</button>
                                 ` : `
-                                    <button onclick="confirmToggleRetire('${s.id}', '退職')" class="bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded text-[11px] transition" title="退職処理">退職</button>
+                                    <button onclick="confirmToggleRetire('${s.id}', '退職')" class="bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded text-[11px] transition" title="退職">退職</button>
                                 `}
                                 <button onclick="confirmDeleteStaff('${s.id}')" class="bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded text-[11px] transition" title="完全削除">削除</button>
                             </div>
@@ -3383,6 +3591,222 @@
                     submitBtn.textContent = originalBtnText;
                 }
             }
+        }
+
+
+        // 有休残日数・付与のクイック調整モーダル関連
+        let currentQuickStaff = null;
+
+        function openLeaveDaysModal(staffId) {
+            const staff = staffList.find(s => String(s.id) === String(staffId));
+            if (!staff) {
+                showToast('スタッフが見つかりません', 'fa-circle-exclamation text-amber-400');
+                return;
+            }
+            currentQuickStaff = staff;
+
+            document.getElementById('quickStaffTargetId').value = staff.id;
+            document.getElementById('quickStaffId').textContent = 'ID: ' + staff.id;
+            document.getElementById('quickStaffName').textContent = staff.name;
+            document.getElementById('quickStaffRole').textContent = '(' + (staff.role || '未設定') + ')';
+            
+            const hireInfo = formatJapaneseDate(staff.hireDate);
+            document.getElementById('quickStaffHireInfo').textContent = (staff.hireDate || '未設定') + ' (' + hireInfo.durationText + ')';
+
+            document.getElementById('quickCarriedOver').value = (parseFloat(staff.carriedOver) || 0).toFixed(1);
+            document.getElementById('quickCurrentGranted').value = (parseFloat(staff.currentGranted) || 0).toFixed(1);
+
+            // 法定日数の計算ラベル
+            const legalGrant = getLegalGrantDays(staff.hireDate);
+            document.getElementById('quickLegalGrantLabel').textContent = `勤続年数から法定付与（${legalGrant.toFixed(1)}日）を今年度付与にセット`;
+
+            // 付与月バッジの表示
+            const grantBadge = document.getElementById('quickGrantMonthBadge');
+            if (grantBadge) {
+                grantBadge.textContent = '付与月: ' + (hireInfo.grantMonth !== '--' ? hireInfo.grantMonth + '月' : '未設定');
+            }
+
+            calcQuickLeavePreview();
+            document.getElementById('leaveDaysModal').classList.remove('hidden');
+        }
+
+        function closeLeaveDaysModal() {
+            document.getElementById('leaveDaysModal').classList.add('hidden');
+            currentQuickStaff = null;
+        }
+
+        function getLegalGrantDays(hireDateStr) {
+            if (!hireDateStr) return 10.0;
+            const hireDate = new Date(hireDateStr);
+            if (isNaN(hireDate.getTime())) return 10.0;
+            const today = new Date();
+            let years = (today - hireDate) / (1000 * 60 * 60 * 24 * 365.25);
+            if (years < 0.5) return 0.0;
+            else if (years < 1.5) return 10.0;
+            else if (years < 2.5) return 11.0;
+            else if (years < 3.5) return 12.0;
+            else if (years < 4.5) return 14.0;
+            else if (years < 5.5) return 16.0;
+            else if (years < 6.5) return 18.0;
+            return 20.0;
+        }
+
+        function applyLegalGrantToQuickModal() {
+            if (!currentQuickStaff) return;
+            const legal = getLegalGrantDays(currentQuickStaff.hireDate);
+            document.getElementById('quickCurrentGranted').value = legal.toFixed(1);
+            calcQuickLeavePreview();
+            showToast(`今年度付与に法定日数 ${legal.toFixed(1)}日 を反映しました`, 'fa-calculator text-teal-400');
+        }
+
+        function calcQuickLeavePreview() {
+            if (!currentQuickStaff) return;
+            const carried = parseFloat(document.getElementById('quickCarriedOver').value) || 0;
+            const granted = parseFloat(document.getElementById('quickCurrentGranted').value) || 0;
+            const used = getStaffEffectiveUsed(currentQuickStaff);
+
+            const totalRemaining = Math.max(0, carried + granted - used);
+            const carriedRem = Math.max(0, carried - used);
+            const grantedRem = Math.max(0, granted - Math.max(0, used - carried));
+
+            document.getElementById('quickUsedDays').textContent = used.toFixed(1);
+            document.getElementById('quickTotalRemaining').textContent = totalRemaining.toFixed(1);
+            document.getElementById('quickCarriedRemaining').textContent = carriedRem.toFixed(1) + ' 日';
+            document.getElementById('quickGrantedRemaining').textContent = grantedRem.toFixed(1) + ' 日';
+        }
+
+        async function handleQuickLeaveSave(e) {
+            e.preventDefault();
+            if (!currentQuickStaff) return;
+
+            const submitBtn = document.getElementById('quickLeaveSubmitBtn');
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 保存中...';
+
+            const carriedOver = parseFloat(document.getElementById('quickCarriedOver').value) || 0;
+            const currentGranted = parseFloat(document.getElementById('quickCurrentGranted').value) || 0;
+
+            const targetStaffId = currentQuickStaff.id;
+            const staffName = currentQuickStaff.name;
+
+            // もしリセット直後（currentQuickStaff.used === 0）なら 0.0 を確実にGASに保存
+            const effectiveUsed = getStaffEffectiveUsed(currentQuickStaff);
+            const savedUsed = (currentQuickStaff.used === 0 && effectiveUsed === 0) ? 0.0 : (parseFloat(currentQuickStaff.used) || effectiveUsed);
+
+            const payload = {
+                id: targetStaffId,
+                name: staffName,
+                role: currentQuickStaff.role || '介護士',
+                pin: currentQuickStaff.pin || '0123',
+                hireDate: currentQuickStaff.hireDate || '',
+                joinedDate: currentQuickStaff.hireDate || '',
+                carriedOver: carriedOver,
+                currentGranted: currentGranted,
+                used: savedUsed,
+                status: currentQuickStaff.status || '在職'
+            };
+
+            try {
+                // ローカル状態を即時更新
+                currentQuickStaff.carriedOver = carriedOver;
+                currentQuickStaff.currentGranted = currentGranted;
+
+                const targetInList = staffList.find(s => String(s.id) === String(targetStaffId));
+                if (targetInList) {
+                    targetInList.carriedOver = carriedOver;
+                    targetInList.currentGranted = currentGranted;
+                }
+                saveLocalData();
+
+                if (isGasConfigured()) {
+                    const res = await apiCall("updateStaff", payload);
+                    if (res && res.success) {
+                        showToast(`${staffName} 様の有休日数（前年繰越: ${carriedOver.toFixed(1)}日 / 今年度付与: ${currentGranted.toFixed(1)}日）を保存しました`, 'fa-circle-check text-emerald-400');
+                    } else {
+                        showToast('スプレッドシートへの保存で通信確認が必要です（画面には保存済）', 'fa-triangle-exclamation text-amber-400');
+                    }
+                } else {
+                    showToast(`${staffName} 様の有休日数を更新しました`, 'fa-circle-check text-emerald-400');
+                }
+
+                closeLeaveDaysModal();
+                renderStaffTable();
+            } catch (err) {
+                console.error(err);
+                showToast('保存中にエラーが発生しました', 'fa-circle-exclamation text-rose-400');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        }
+
+
+        // 付与月の年次更新（リセット）：余った有給を前年繰越へ移動し、新付与を付与、消化済を0にリセット
+        function executeAnnualLeaveReset() {
+            if (!currentQuickStaff) return;
+            const staff = currentQuickStaff;
+
+            // 1. 現時点の有効な残日数を計算（前年繰越 ＋ 今年度付与 － 消化済）
+            const effectiveUsed = getStaffEffectiveUsed(staff);
+            const currentCarried = parseFloat(staff.carriedOver) || 0;
+            const currentGranted = parseFloat(staff.currentGranted) || 0;
+            const currentRemaining = Math.max(0, currentCarried + currentGranted - effectiveUsed);
+
+            // 2. 新・前年繰越（今年度余った有給が前年繰り越しに移動）
+            // ※法律上の上限（20日）または実余り日数
+            const newCarried = parseFloat(currentRemaining.toFixed(1));
+
+            // 3. 新・今年度付与（勤続年数に応じた法定日数）
+            const newGranted = getLegalGrantDays(staff.hireDate);
+
+            // 4. リセット日を今日の日付（YYYY-MM-DD）に設定
+            const today = new Date();
+            // 付与月の初日（YYYY-MM-01）を基準日とし、前月以前の消化を確実にリセット
+            const resetDateYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+            setStaffResetDate(staff.id, resetDateYmd);
+            staff.usedResetDate = resetDateYmd;
+            staff.used = 0.0;
+
+            // 5. モーダルの入力欄を更新
+            document.getElementById('quickCarriedOver').value = newCarried.toFixed(1);
+            document.getElementById('quickCurrentGranted').value = newGranted.toFixed(1);
+
+            calcQuickLeavePreview();
+
+            showToast(`${staff.name} 様の付与月リセットを計算しました（前年繰越: ${newCarried.toFixed(1)}日 / 新付与: ${newGranted.toFixed(1)}日 / 消化済: 0.0日）。「保存して反映」を押すと確定します`, 'fa-circle-check text-emerald-400');
+        }
+
+        // 通常のスタッフ編集モーダル内での付与月リセット
+        function executeRegisterModalAnnualReset() {
+            const editId = document.getElementById('editStaffTargetId').value;
+            const staff = editId ? staffList.find(s => String(s.id) === String(editId)) : null;
+            if (!staff) {
+                showToast('既存スタッフの編集時のみリセット可能です', 'fa-circle-info text-amber-400');
+                return;
+            }
+
+            const effectiveUsed = getStaffEffectiveUsed(staff);
+            const currentCarried = parseFloat(document.getElementById('regCarriedOver').value) || 0;
+            const currentGranted = parseFloat(document.getElementById('regCurrentGranted').value) || 0;
+            const currentRemaining = Math.max(0, currentCarried + currentGranted - effectiveUsed);
+
+            const newCarried = parseFloat(currentRemaining.toFixed(1));
+            const hireDateStr = document.getElementById('regHireDate').value || staff.hireDate;
+            const newGranted = getLegalGrantDays(hireDateStr);
+
+            const today = new Date();
+            // 付与月の初日（YYYY-MM-01）を基準日とし、前月以前の消化を確実にリセット
+            const resetDateYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+            setStaffResetDate(staff.id, resetDateYmd);
+            staff.usedResetDate = resetDateYmd;
+            staff.used = 0.0;
+
+            document.getElementById('regCarriedOver').value = newCarried.toFixed(1);
+            document.getElementById('regCurrentGranted').value = newGranted.toFixed(1);
+            document.getElementById('regUsed').value = '0';
+
+            showToast(`${staff.name} 様の付与月リセットを計算しました（繰越: ${newCarried.toFixed(1)}日 / 新付与: ${newGranted.toFixed(1)}日 / 消化: 0日）。「保存」を押して確定してください`, 'fa-circle-check text-emerald-400');
         }
 
         function editStaff(id) {
