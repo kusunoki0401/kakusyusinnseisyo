@@ -165,6 +165,16 @@
 
             <!-- スタッフ専用画面 -->
             <div id="staffView" class="space-y-6 hidden">
+                <div id="staffMyPageViewBanner" class="hidden bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div class="flex items-center gap-2 text-amber-900">
+                        <i class="fa-solid fa-eye text-amber-600"></i>
+                        <span class="font-bold text-sm"><span id="staffMyPageViewName">--</span>さんのマイページを閲覧中（見るだけ）</span>
+                    </div>
+                    <button type="button" onclick="closeStaffMyPage()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>管理画面に戻る</span>
+                    </button>
+                </div>
                 <div class="bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-2xl p-6 shadow-lg border border-teal-500">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-teal-500/50 pb-4 mb-4">
                         <div>
@@ -173,7 +183,7 @@
                                 <button onclick="openGuideModal()" class="bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100 text-xs px-3 py-1 rounded-full border border-emerald-400/30 font-bold transition flex items-center gap-1">
                                     <i class="fa-solid fa-book-bookmark text-amber-300"></i> 付与基準表を見る
                                 </button>
-                                <button onclick="openStaffPinModal()" class="bg-amber-500/30 hover:bg-amber-500/50 text-amber-200 text-xs px-2.5 py-1 rounded-full border border-amber-400/30 font-bold transition flex items-center gap-1">
+                                <button id="staffPinChangeBtn" onclick="openStaffPinModal()" class="bg-amber-500/30 hover:bg-amber-500/50 text-amber-200 text-xs px-2.5 py-1 rounded-full border border-amber-400/30 font-bold transition flex items-center gap-1">
                                     <i class="fa-solid fa-key"></i> PIN変更
                                 </button>
                             </div>
@@ -211,7 +221,7 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- 新規申請フォーム -->
-                    <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div id="staffRequestFormCard" class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex items-center justify-between mb-4">
                             <h3 id="formTitle" class="text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <i id="formTitleIcon" class="fa-solid fa-pen-to-square text-teal-600"></i>
@@ -903,6 +913,37 @@
         </div>
     </div>
 
+    <!-- 暗証番号 強制再設定モーダル（閉じるボタンなし） -->
+    <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden" id="pinResetModal">
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div class="bg-teal-700 px-6 py-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-key text-teal-200"></i>
+                    <span>新しい暗証番号を決めてください</span>
+                </h3>
+            </div>
+            <form onsubmit="handlePinResetSubmit(event)" class="p-6 space-y-4">
+                <p class="text-xs text-slate-600">セキュリティ強化のため、今の番号から新しい4桁の番号に変更してください。</p>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">新しい暗証番号 (4桁)</label>
+                    <input type="password" id="pinResetNewPin" maxlength="4" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">新しい暗証番号 (確認再入力)</label>
+                    <input type="password" id="pinResetNewPinConfirm" maxlength="4" required class="w-full border border-slate-300 rounded-xl p-3 text-center text-lg tracking-widest font-mono focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div id="pinResetError" class="hidden bg-red-50 text-red-600 p-3 rounded-xl text-xs border border-red-200 flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation shrink-0"></i>
+                    <span id="pinResetErrorMsg">入力内容を確認してください</span>
+                </div>
+                <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-check"></i>
+                    <span>この番号に設定する</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- スタッフ登録・編集モーダル -->
     <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden" id="registerModal">
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -922,24 +963,19 @@
                     <input type="text" id="regName" placeholder="例: 楠木 太郎" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
                 </div>
 
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">職種 <span class="text-red-500">*</span></label>
-                        <select id="regRole" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
-                            <option value="介護士">介護士</option>
-                            <option value="看護師">看護師</option>
-                            <option value="ケアマネジャー">ケアマネジャー</option>
-                            <option value="管理者">管理者</option>
-                            <option value="清掃">清掃</option>
-                            <option value="事務">事務</option>
-                            <option value="その他">その他</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">暗証番号 (PIN 4桁) <span class="text-red-500">*</span></label>
-                        <input type="text" id="regPin" maxlength="4" placeholder="例: 0123" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500 tracking-widest font-mono">
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">職種 <span class="text-red-500">*</span></label>
+                    <select id="regRole" required class="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-teal-500">
+                        <option value="介護士">介護士</option>
+                        <option value="看護師">看護師</option>
+                        <option value="ケアマネジャー">ケアマネジャー</option>
+                        <option value="管理者">管理者</option>
+                        <option value="清掃">清掃</option>
+                        <option value="事務">事務</option>
+                        <option value="その他">その他</option>
+                    </select>
                 </div>
+                <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">暗証番号は「暗証番号をリセット」で発行してください。</p>
 
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">入社年月日 <span class="text-red-500">*</span></label>
@@ -1177,8 +1213,25 @@
                 <span class="text-[11px] text-slate-400 font-bold block mb-1">発行されたログインID</span>
                 <span id="issuedStaffId" class="text-4xl font-extrabold text-teal-700 tracking-wider font-mono">1001</span>
             </div>
+            <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">暗証番号は「暗証番号をリセット」で発行してください。</p>
             <button type="button" onclick="closeIdNoticeModal()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm">
                 OK（確認しました）
+            </button>
+        </div>
+    </div>
+
+    <!-- 暗証番号リセット後の仮番号通知モーダル（閉じると再表示不可） -->
+    <div id="tempPinNoticeModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center space-y-4 fade-in">
+            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-3xl">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <h3 class="font-bold text-xl text-slate-800"><span id="tempPinStaffName">--</span>さんの暗証番号をリセットしました</h3>
+            <div class="bg-slate-100 p-4 rounded-2xl border border-slate-200">
+                <span class="text-2xl font-extrabold text-amber-700 tracking-wide font-mono">仮の暗証番号: <span id="tempPinValue">----</span>（この画面を閉じると再表示できません）</span>
+            </div>
+            <button type="button" onclick="closeTempPinModal()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 rounded-xl shadow transition text-sm">
+                OK（お伝えしました）
             </button>
         </div>
     </div>
@@ -1215,17 +1268,12 @@
                 <button onclick="exportBackupData()" class="text-slate-400 hover:text-white transition flex items-center gap-1">
                     <i class="fa-solid fa-download"></i> バックアップ保存
                 </button>
-                <span>|</span>
-                <button onclick="importBackupData()" class="text-slate-400 hover:text-white transition flex items-center gap-1">
-                    <i class="fa-solid fa-upload"></i> バックアップ復元
-                </button>
-                <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="handleFileImport(event)">
             </div>
         </div>
     </footer>
 
     <script>
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwcogflrLWYXbwO6qnWjvDEunR6FjYCO8vEs2W1eSwvwmYa29oTq1ui7lLk049MpNMupQ/exec";
+        const GAS_WEB_APP_URL = (['localhost', '127.0.0.1'].includes(location.hostname) && window.KUSUNOKI_TEST_API) || "https://script.google.com/macros/s/AKfycbwcogflrLWYXbwO6qnWjvDEunR6FjYCO8vEs2W1eSwvwmYa29oTq1ui7lLk049MpNMupQ/exec";
 
         let currentUser = null;
         let currentLoginMode = 'staff';
@@ -1237,9 +1285,28 @@
         let staffList = [];
         let requestList = [];
 
-        // 処理済み・削除済みデータの同期時復活防止キャッシュ
-        let deletedRequestIds = new Set();
-        let processedRequestMap = new Map();
+        // 管理者が職員のマイページを閲覧中（見るだけ）のときに使う状態
+        let viewingStaffId = null;
+        let viewingStaffData = null; // { staff, requests }
+
+        function getStoredToken() {
+            try { return sessionStorage.getItem('kusunoki_token') || ''; } catch (e) { return ''; }
+        }
+
+        function setToken(token) {
+            try {
+                if (token) sessionStorage.setItem('kusunoki_token', token);
+                else sessionStorage.removeItem('kusunoki_token');
+            } catch (e) { /* ignore */ }
+        }
+
+        function loginErrorMessage(res) {
+            const code = res && res.error;
+            if (code === 'LOCKED') return '暗証番号を続けて間違えたため、15分間ログインできません。';
+            if (code === 'RETIRED') return 'このアカウントは退職処理されているためログインできません。';
+            if (code === 'BAD_CREDENTIALS') return 'ログインIDまたは暗証番号が違います。';
+            return (res && res.message) || 'ログインに失敗しました。';
+        }
 
         function normalizeNumber(str) {
             if (str === null || str === undefined) return "";
@@ -1487,14 +1554,14 @@
 
         async function handleStaffPinChangeSubmit(e) {
             e.preventDefault();
-            const currentPin = normalizeNumber(document.getElementById('staffCurrentPin').value).padStart(4, '0');
-            const newPin = normalizeNumber(document.getElementById('staffNewPin').value).padStart(4, '0');
-            const confirmPin = normalizeNumber(document.getElementById('staffNewPinConfirm').value).padStart(4, '0');
-            
+            const currentPin = normalizeNumber(document.getElementById('staffCurrentPin').value);
+            const newPin = normalizeNumber(document.getElementById('staffNewPin').value);
+            const confirmPin = normalizeNumber(document.getElementById('staffNewPinConfirm').value);
+
             const errBox = document.getElementById('staffPinError');
             const errMsg = document.getElementById('staffPinErrorMsg');
 
-            if (newPin.length !== 4) {
+            if (!/^\d{4}$/.test(newPin)) {
                 errMsg.textContent = '新しい暗証番号は4桁の数字で入力してください。';
                 errBox.classList.remove('hidden');
                 return;
@@ -1505,56 +1572,15 @@
                 return;
             }
 
-            const staff = staffList.find(s => String(s.id) === String(currentUser.id));
-            if (!staff) {
-                errMsg.textContent = 'スタッフ情報が見つかりません。';
-                errBox.classList.remove('hidden');
+            const res = await apiCall("changePin", { currentPin, newPin });
+            if (res && res.success) {
+                showToast('暗証番号(PIN)を変更しました', 'fa-circle-check text-emerald-400');
+                closeStaffPinModal();
+                await fetchLatestData();
                 return;
             }
-
-            const sPin = normalizeNumber(staff.pin || '0123').padStart(4, '0');
-            if (currentPin !== sPin) {
-                errMsg.textContent = '現在の暗証番号が正しくありません。';
-                errBox.classList.remove('hidden');
-                return;
-            }
-
-            if (isGasConfigured()) {
-                // GASバックエンドは updateStaff で暗証番号（pin）の更新に対応
-                const updatePayload = {
-                    id: staff.id,
-                    name: staff.name,
-                    role: staff.role,
-                    pin: newPin,
-                    hireDate: staff.hireDate,
-                    joinedDate: staff.hireDate,
-                    carriedOver: staff.carriedOver,
-                    currentGranted: staff.currentGranted,
-                    used: staff.used,
-                    status: staff.status || '在職'
-                };
-                const res = await apiCall("updateStaff", updatePayload);
-                if (res && res.success) {
-                    staff.pin = newPin;
-                    currentUser.pin = newPin;
-                    saveLocalData();
-                    showToast('暗証番号(PIN)を変更しました', 'fa-circle-check text-emerald-400');
-                    closeStaffPinModal();
-                    await fetchLatestData();
-                    return;
-                } else {
-                    errMsg.textContent = res ? res.message : 'スプレッドシートへの保存に失敗しました。';
-                    errBox.classList.remove('hidden');
-                    return;
-                }
-            }
-
-            // ローカル保存モード
-            staff.pin = newPin;
-            currentUser.pin = newPin;
-            saveLocalData();
-            showToast('暗証番号(PIN)を変更しました', 'fa-circle-check text-emerald-400');
-            closeStaffPinModal();
+            errMsg.textContent = res ? res.message : '暗証番号の変更に失敗しました。';
+            errBox.classList.remove('hidden');
         }
 
         function openAdminPinModal() {
@@ -1589,29 +1615,14 @@
                 return;
             }
 
-            if (isGasConfigured()) {
-                const res = await apiCall("changeAdminPin", { currentPin, newPin });
-                if (res && res.success) {
-                    localStorage.setItem('kusunoki_admin_pin', newPin);
-                    showToast('管理者暗証番号を変更しました');
-                    closeAdminPinModal();
-                    return;
-                } else {
-                    errMsg.textContent = res ? res.message : '現在の管理者暗証番号が正しくありません';
-                    errBox.classList.remove('hidden');
-                    return;
-                }
-            }
-
-            let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
-            if (currentPin === savedAdminPin) {
-                localStorage.setItem('kusunoki_admin_pin', newPin);
+            const res = await apiCall("changeAdminPin", { currentPin, newPin });
+            if (res && res.success) {
                 showToast('管理者暗証番号を変更しました');
                 closeAdminPinModal();
-            } else {
-                errMsg.textContent = '現在の管理者暗証番号が正しくありません';
-                errBox.classList.remove('hidden');
+                return;
             }
+            errMsg.textContent = res ? res.message : '現在の管理者暗証番号が正しくありません';
+            errBox.classList.remove('hidden');
         }
 
         async function handleAdminLoginModalSubmit(e) {
@@ -1621,48 +1632,20 @@
             const errBox = document.getElementById('modalAdminLoginError');
             const errText = document.getElementById('modalAdminErrorMsg');
 
-            // 147123 または保存済みPINとの高速ローカル認証（GASの待機時間を挟まず即座にログイン）
-            let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
-            if (savedAdminPin === '123456' || savedAdminPin === '1234') {
-                savedAdminPin = '147123';
-                localStorage.removeItem('kusunoki_admin_pin');
-            }
-            if (pinInput === savedAdminPin || pinInput === '147123') {
-                currentUser = { id: 'admin', name: '管理者', role: '管理者', isAdmin: true };
+            const res = await apiCall("login", { id: 'admin', pin: pinInput });
+            if (res && res.success) {
+                setToken(res.token);
+                currentUser = { role: 'admin', id: 'admin', name: '管理者' };
                 if (errBox) errBox.classList.add('hidden');
                 document.getElementById('modalAdminPin').value = '';
                 clearLoginInputs();
                 closeAdminLoginModal();
                 showMainApp();
                 showToast('管理者としてログインしました');
-
-                // バックグラウンドで同期（画面遷移を待たせない）
-                if (isGasConfigured()) {
-                    apiCall("login", { isAdmin: true, id: 'admin', pin: pinInput }).catch(() => {});
-                }
                 return;
             }
 
-            // 万が一変更済みPINがサーバー側にある場合のみGASへフォールバック
-            if (isGasConfigured()) {
-                try {
-                    const res = await apiCall("login", { isAdmin: true, id: 'admin', pin: pinInput });
-                    if (res && res.success) {
-                        currentUser = res.user;
-                        if (errBox) errBox.classList.add('hidden');
-                        document.getElementById('modalAdminPin').value = '';
-                        clearLoginInputs();
-                        closeAdminLoginModal();
-                        showMainApp();
-                        showToast('管理者としてログインしました');
-                        return;
-                    }
-                } catch (err) {
-                    console.warn("GAS admin login call failed:", err);
-                }
-            }
-
-            if (errText) errText.textContent = '管理者暗証番号(6桁)が違います';
+            if (errText) errText.textContent = loginErrorMessage(res);
             if (errBox) errBox.classList.remove('hidden');
         }
 
@@ -1713,31 +1696,37 @@
             document.getElementById('sentNoticeModal').classList.add('hidden');
         }
 
-        function isGasConfigured() {
-            return GAS_WEB_APP_URL && GAS_WEB_APP_URL.startsWith("https://script.google.com");
-        }
-
         async function apiCall(action, payload = {}) {
-            if (!isGasConfigured()) return null;
             try {
+                const body = { ...payload, action };
+                const token = getStoredToken();
+                if (token) body.token = token;
+
                 const response = await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    // actionプロパティがpayloadによって上書きされないよう明示的にactionを最優先
-                    body: JSON.stringify({ ...payload, action })
+                    body: JSON.stringify(body)
                 });
                 const text = await response.text();
+                let data;
                 try {
-                    const data = JSON.parse(text);
-                    if (!data.success && data.error) {
-                        console.error("GAS Backend Error:", data.error);
-                    }
-                    return data;
+                    data = JSON.parse(text);
                 } catch (parseErr) {
                     console.error("GAS parse error:", text);
                     showToast('通信エラー: サーバー応答の読み込みに失敗しました', 'fa-circle-exclamation text-amber-400');
                     return null;
                 }
+
+                if (!data.success && data.error) {
+                    console.error("GAS Backend Error:", data.error);
+                    if (data.error === 'AUTH_REQUIRED') {
+                        showToast('ログインの有効期限が切れました', 'fa-circle-exclamation text-amber-400');
+                        handleLogout();
+                    } else if (data.error === 'PIN_RESET_REQUIRED') {
+                        openPinResetModal();
+                    }
+                }
+                return data;
             } catch (e) {
                 console.error("GAS API Error:", e);
                 showToast('通信エラー: ネットワークまたはURLを確認してください', 'fa-circle-exclamation text-amber-400');
@@ -1746,101 +1735,42 @@
         }
 
         async function fetchLatestData() {
-            // 起動時にまずローカルデータを即座に読み込み、画面の空欄・空白化を防止
-            if (!staffList || staffList.length === 0) {
-                loadLocalData();
-            }
+            if (!currentUser) return;
 
-            if (isGasConfigured()) {
+            if (isUserAdmin(currentUser)) {
                 const res = await apiCall("getAllData");
                 if (res && res.success) {
-                    const rawStaffList = res.staffList || [];
-                    if (rawStaffList.length > 0) {
-                        const localMap = new Map((staffList || []).map(s => [String(s.id), s]));
-                        const normalizedGas = rawStaffList.map(s => normalizeStaffItem(s)).filter(Boolean);
-                        
-                        staffList = normalizedGas.map(norm => {
-                            const local = localMap.get(String(norm.id));
-                            if (local) {
-                                // より大きい消化日数（承認済み直後の最新値）を優先保持
-                                const localUsed = parseFloat(local.used) || 0;
-                                const gasUsed = parseFloat(norm.used) || 0;
-                                if (localUsed > gasUsed) norm.used = localUsed;
-                            }
-                            return norm;
-                        });
-                    }
-
-                    // DEFAULT_STAFF_MASTER に定義されているスタッフ（鴨勅様等）が未登録の場合は自動補完
-                    Object.values(DEFAULT_STAFF_MASTER).forEach(def => {
-                        const defNorm = normalizeStaffItem(def);
-                        if (!staffList.some(s => String(s.id) === String(defNorm.id) || String(s.name || '').replace(/\s+/g, '') === String(defNorm.name || '').replace(/\s+/g, ''))) {
-                            staffList.push(defNorm);
-                        }
-                    });
-                    staffList = deduplicateStaffList(staffList);
-                    
-                    const incomingRequests = res.requestList || [];
-                    // 削除済み・処理済みステータスを優先マージし、同期による未処理への先祖返りを防止
-                    loadTrackingCaches();
-                    // ローカルキャッシュに処理済みの記録があり、GASスプレッドシート側が未処理のものは自動的にGASへ更新同期
-                    if (processedRequestMap && processedRequestMap.size > 0 && isGasConfigured()) {
-                        incomingRequests.forEach(r => {
-                            const cached = processedRequestMap.get(String(r.id));
-                            if (cached && cached.status && r.status !== cached.status) {
-                                apiCall("processRequest", {
-                                    reqId: r.id,
-                                    id: r.id,
-                                    status: cached.status,
-                                    actionType: cached.status === '承認' ? 'approve' : cached.status === '差し戻し' ? 'remand' : 'reject',
-                                    reqAction: cached.status === '承認' ? 'approve' : cached.status === '差し戻し' ? 'remand' : 'reject',
-                                    comment: cached.remandComment || ''
-                                }).catch(() => {});
-                            }
-                        });
-                    }
-                    requestList = incomingRequests
-                        .filter(r => !deletedRequestIds.has(String(r.id)))
-                        .map(r => {
-                            const cached = processedRequestMap.get(String(r.id));
-                            const item = cached ? { ...r, status: cached.status, remandComment: cached.remandComment || r.remandComment } : { ...r };
-                            const rNameClean = String(item.staffName || '').replace(/\s+/g, '');
-                            if (rNameClean) {
-                                const matchedStaff = staffList.find(s => String(s.name || '').replace(/\s+/g, '') === rNameClean);
-                                if (matchedStaff) {
-                                    item.staffId = matchedStaff.id;
-                                }
-                            }
-                            return item;
-                        });
-
-                    ensureStaffListNotEmpty();
-                    saveLocalData();
+                    staffList = res.staffList || [];
+                    requestList = res.requestList || [];
                     updateSyncBadge(true);
-
-                    // 最新データ取得完了時に現在表示中の画面を即時自動更新
-                    const isAdminVisible = !document.getElementById('adminView').classList.contains('hidden');
-                    if (isAdminVisible) {
-                        if (activeAdminSubTab === 'staff') renderStaffTable();
-                        if (activeAdminSubTab === 'requests') renderAdminRequests();
-                        if (activeAdminSubTab === 'search') renderAdminSearchResults();
-                        initSearchFilters();
-                    } else if (currentUser && currentUser.id !== 'admin') {
-                        refreshStaffCard();
-                        renderStaffRequests();
-                    }
-                    return;
+                }
+            } else {
+                const res = await apiCall("getMyData");
+                if (res && res.success) {
+                    staffList = res.user ? [res.user] : [];
+                    requestList = res.requests || [];
+                    updateSyncBadge(true);
                 }
             }
-            loadLocalData();
-            updateSyncBadge(false, 'ローカル保持 (GAS通信未接続)');
-            const isAdminVisibleOffline = !document.getElementById('adminView').classList.contains('hidden');
-            if (isAdminVisibleOffline) {
+
+            if (viewingStaffId) {
+                const vres = await apiCall('getStaffView', { staffId: viewingStaffId });
+                if (vres && vres.success) {
+                    viewingStaffData = { staff: vres.user, requests: vres.requests || [] };
+                }
+            }
+
+            // 最新データ取得完了時に現在表示中の画面を即時自動更新
+            const isAdminVisible = !document.getElementById('adminView').classList.contains('hidden');
+            if (isAdminVisible) {
                 if (activeAdminSubTab === 'staff') renderStaffTable();
                 if (activeAdminSubTab === 'requests') renderAdminRequests();
                 if (activeAdminSubTab === 'search') renderAdminSearchResults();
                 initSearchFilters();
-            } else if (currentUser && currentUser.id !== 'admin') {
+            } else if (viewingStaffId) {
+                refreshStaffCard();
+                renderStaffRequests();
+            } else if (currentUser && !isUserAdmin(currentUser)) {
                 refreshStaffCard();
                 renderStaffRequests();
             }
@@ -1872,184 +1802,24 @@
             return s;
         }
 
-        const CANONICAL_STAFF_ID_MAP = {
-            '吉田恭子': '1003',
-            '佐々木大介': '1004',
-            '小野早美': '1005',
-            '前田昌子': '1006',
-            '樋渡絵美': '1007',
-            '星さち': '1008',
-            '相田沙生': '1009',
-            '志田広幸': '1010',
-            '奈良孝子': '1011',
-            '園部彩': '1012',
-            '半井紀江': '1013',
-            '小林志歩': '1014',
-            '蛭田千明': '1015',
-            '平子由美': '1016',
-            '鈴木梓砂': '1017',
-            '長岡直美': '1018',
-            '斎藤美津子': '1022',
-            '齋藤美津子': '1022',
-            '阿部円香': '1023',
-            '鴨勅光': '1020',
-            '鴨勅': '1020',
-            '鴨': '1020',
-            '相澤美咲': '1025'
-        };
-
-        function normalizeStaffItem(s) {
-            if (!s) return null;
-            const rawHire = s.hireDate || s.joinedDate || s.joinDate || '';
-            const hireDate = normalizeDateToYmd(rawHire);
-            const cleanName = String(s.name || '').replace(/\s+/g, '');
-            const canonicalId = CANONICAL_STAFF_ID_MAP[cleanName] || String(s.id || '');
-            return {
-                id: canonicalId,
-                name: String(s.name || '').trim(),
-                role: String(s.role || '介護士'),
-                pin: s.pin ? String(s.pin) : '0123',
-                hireDate: hireDate,
-                joinedDate: hireDate,
-                carriedOver: parseFloat(s.carriedOver) || 0,
-                currentGranted: parseFloat(s.currentGranted) || 0,
-                used: parseFloat(s.used) || 0,
-                status: s.status || (s.isRetired ? '退職' : '在職'),
-                usedResetDate: s.usedResetDate || getStaffResetDate(canonicalId) || '',
-                isAdmin: Boolean(s.isAdmin || s.role === '管理者' || canonicalId === '1004')
-            };
-        }
-
-        function deduplicateStaffList(list) {
-            const map = new Map();
-            for (const item of list) {
-                if (!item || !item.id) continue;
-                const sId = String(item.id);
-                if (!map.has(sId)) {
-                    map.set(sId, { ...item, id: sId });
-                } else {
-                    const existing = map.get(sId);
-                    // 0より大きい有効な数値や、設定済み入社日・PINを優先保持
-                    const carriedOver = (parseFloat(existing.carriedOver) || 0) > 0 
-                        ? parseFloat(existing.carriedOver) 
-                        : (parseFloat(item.carriedOver) || 0);
-                    const currentGranted = (parseFloat(existing.currentGranted) || 0) > 0 
-                        ? parseFloat(existing.currentGranted) 
-                        : (parseFloat(item.currentGranted) || 0);
-                    const used = Math.max(parseFloat(existing.used) || 0, parseFloat(item.used) || 0);
-                    const hireDate = existing.hireDate || item.hireDate || existing.joinedDate || item.joinedDate || '';
-                    const pin = (existing.pin && existing.pin !== '0123') ? existing.pin : (item.pin || '0123');
-
-                    map.set(sId, {
-                        ...existing,
-                        ...item,
-                        id: sId,
-                        carriedOver,
-                        currentGranted,
-                        used,
-                        hireDate,
-                        joinedDate: hireDate,
-                        pin,
-                        usedResetDate: existing.usedResetDate || item.usedResetDate || getStaffResetDate(sId) || ''
-                    });
-                }
-            }
-            return Array.from(map.values());
-        }
-
         function findStaffForRequest(r) {
             if (!r) return null;
-            const rNameClean = String(r.staffName || '').replace(/\s+/g, '');
+            const rId = String((r && r.staffId) || '').trim();
+            if (rId) {
+                const byId = staffList.find(s => String(s.id) === rId);
+                if (byId) return byId;
+            }
+            const rNameClean = String((r && r.staffName) || '').replace(/\s+/g, '');
             if (rNameClean) {
                 const byName = staffList.find(s => String(s.name || '').replace(/\s+/g, '') === rNameClean);
                 if (byName) return byName;
             }
-            const rId = String(r.staffId || '').trim();
-            if (rId) {
-                const canonicalRId = CANONICAL_STAFF_ID_MAP[rNameClean] || rId;
-                const byId = staffList.find(s => String(s.id) === canonicalRId || String(s.id) === rId);
-                if (byId) return byId;
-            }
             return null;
         }
 
-        // 承認済みの有休申請（全休・午前半休・午後半休）を動的集計し、実効消化日数を算出
-        function getStaffResetDate(staffId) {
-            try {
-                const map = JSON.parse(localStorage.getItem('kusunoki_staff_reset_dates') || '{}');
-                return map[String(staffId)] || '';
-            } catch (e) {
-                return '';
-            }
-        }
-
-        function setStaffResetDate(staffId, resetDate) {
-            try {
-                const map = JSON.parse(localStorage.getItem('kusunoki_staff_reset_dates') || '{}');
-                map[String(staffId)] = resetDate;
-                localStorage.setItem('kusunoki_staff_reset_dates', JSON.stringify(map));
-            } catch (e) {
-                console.error('Error saving reset date:', e);
-            }
-        }
-
-        // 承認済みの有休申請（全休・午前半休・午後半休）を動的集計・算出（リセット基準日以降のみ集計）
+        // サーバーが算出した消化日数（スタッフ一覧 H列）をそのまま使う
         function getStaffEffectiveUsed(staff) {
-            if (!staff) return 0;
-            const sId = String(staff.id || '').trim();
-            const sNameClean = String(staff.name || '').replace(/\s+/g, '');
-            const resetDateStr = staff.usedResetDate || getStaffResetDate(sId) || '';
-            
-            let approvedLeaveDays = 0;
-            (requestList || []).forEach(r => {
-                if (!r || !isApprovedStatus(r.status)) return;
-                const rType = String(r.type || '');
-                if (rType.includes('有休') || rType.includes('有給') || rType.includes('年休')) {
-                    const rStaff = findStaffForRequest(r);
-                    const isMatch = (rStaff && String(rStaff.id) === sId) ||
-                                    (sNameClean && String(r.staffName || '').replace(/\s+/g, '') === sNameClean) ||
-                                    (sId && String(r.staffId || '').trim() === sId);
-                    if (isMatch) {
-                        // リセット基準日が設定されている場合、それ以前の過去申請は新年度の消化済に含めない！
-                        if (resetDateStr) {
-                            const reqDate = r.startDate || r.createdAt || '';
-                            const reqYmd = normalizeDateToYmd(reqDate);
-                            if (reqYmd && reqYmd < resetDateStr) {
-                                return; // 過去年度の申請なので除外
-                            }
-                        }
-                        let d = parseFloat(r.days);
-                        if (isNaN(d) || d <= 0) {
-                            d = rType.includes('半') ? 0.5 : 1.0;
-                        }
-                        approvedLeaveDays += d;
-                    }
-                }
-            });
-
-            const baseUsed = parseFloat(staff.used) || 0;
-            return parseFloat(Math.max(baseUsed, approvedLeaveDays).toFixed(1));
-        }
-
-        function loadTrackingCaches() {
-            try {
-                const d = localStorage.getItem('kusunoki_deleted_requests');
-                deletedRequestIds = d ? new Set(JSON.parse(d)) : new Set();
-                const p = localStorage.getItem('kusunoki_processed_requests');
-                processedRequestMap = p ? new Map(JSON.parse(p)) : new Map();
-            } catch (e) {
-                deletedRequestIds = new Set();
-                processedRequestMap = new Map();
-            }
-        }
-
-        function saveTrackingCaches() {
-            try {
-                localStorage.setItem('kusunoki_deleted_requests', JSON.stringify(Array.from(deletedRequestIds)));
-                localStorage.setItem('kusunoki_processed_requests', JSON.stringify(Array.from(processedRequestMap.entries())));
-            } catch (e) {
-                console.error("Failed to save tracking caches", e);
-            }
+            return parseFloat(staff && staff.used) || 0;
         }
 
         function updateSyncBadge(online, text) {
@@ -2065,79 +1835,6 @@
             }
         }
 
-        function loadLocalData() {
-            try {
-                loadTrackingCaches();
-                const s = localStorage.getItem('kusunoki_staff_data');
-                const r = localStorage.getItem('kusunoki_requests_data');
-                staffList = s ? deduplicateStaffList(JSON.parse(s).map(normalizeStaffItem)) : [];
-                const rawRequests = r ? JSON.parse(r) : [];
-                
-                requestList = rawRequests
-                    .filter(req => !deletedRequestIds.has(String(req.id)))
-                    .map(req => {
-                        const cached = processedRequestMap.get(String(req.id));
-                        const item = cached ? { ...req, status: cached.status, remandComment: cached.remandComment || req.remandComment } : { ...req };
-                        const rNameClean = String(item.staffName || '').replace(/\s+/g, '');
-                        if (rNameClean) {
-                            const matchedStaff = staffList.find(st => String(st.name || '').replace(/\s+/g, '') === rNameClean);
-                            if (matchedStaff) {
-                                item.staffId = matchedStaff.id;
-                            } else if (CANONICAL_STAFF_ID_MAP[rNameClean]) {
-                                item.staffId = CANONICAL_STAFF_ID_MAP[rNameClean];
-                            }
-                        }
-                        return item;
-                    });
-            } catch (e) {
-                staffList = [];
-                requestList = [];
-            }
-            ensureStaffListNotEmpty();
-        }
-
-        const DEFAULT_STAFF_MASTER = {
-            '1003': { id: '1003', name: '吉田恭子', role: '介護士', pin: '1728', hireDate: '2026-09-15', carriedOver: 5.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1004': { id: '1004', name: '佐々木大介', role: '管理者', pin: '7030', hireDate: '2017-04-10', carriedOver: 6.0, currentGranted: 20.0, used: 1.0, status: '在職' },
-            '1005': { id: '1005', name: '小野早美', role: '看護師', pin: '9153', hireDate: '2026-04-01', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
-            '1006': { id: '1006', name: '前田昌子', role: '清掃', pin: '1114', hireDate: '2026-06-22', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
-            '1007': { id: '1007', name: '樋渡絵美', role: '介護士', pin: '5825', hireDate: '2023-02-01', carriedOver: 5.5, currentGranted: 14.0, used: 0.0, status: '在職' },
-            '1008': { id: '1008', name: '星さち', role: '事務', pin: '0123', hireDate: '2018-04-23', carriedOver: 0.0, currentGranted: 15.0, used: 0.0, status: '在職' },
-            '1009': { id: '1009', name: '相田沙生', role: '介護士', pin: '0327', hireDate: '2026-06-16', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
-            '1010': { id: '1010', name: '志田広幸', role: '介護士', pin: '3594', hireDate: '2026-04-06', carriedOver: 0.0, currentGranted: 0.0, used: 0.0, status: '在職' },
-            '1011': { id: '1011', name: '奈良孝子', role: '清掃', pin: '0245', hireDate: '2026-08-23', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1012': { id: '1012', name: '園部彩', role: '介護士', pin: '6221', hireDate: '2025-07-02', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1013': { id: '1013', name: '半井紀江', role: '介護士', pin: '1232', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
-            '1014': { id: '1014', name: '小林志歩', role: '介護士', pin: '2368', hireDate: '2024-11-18', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
-            '1015': { id: '1015', name: '蛭田千明', role: '介護士', pin: '2229', hireDate: '2024-12-09', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
-            '1016': { id: '1016', name: '平子由美', role: '介護士', pin: '4365', hireDate: '2024-04-01', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
-            '1017': { id: '1017', name: '鈴木梓砂', role: '看護師', pin: '1129', hireDate: '2024-04-01', carriedOver: 0.0, currentGranted: 11.0, used: 0.0, status: '在職' },
-            '1018': { id: '1018', name: '長岡直美', role: '介護士', pin: '0123', hireDate: '2025-12-01', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1020': { id: '1020', name: '鴨勅 光', role: '計画作成担当者', pin: '0123', hireDate: '2025-04-14', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1022': { id: '1022', name: '斎藤美津子', role: '事務', pin: '0123', hireDate: '2024-03-04', carriedOver: 0.0, currentGranted: 12.0, used: 0.0, status: '在職' },
-            '1023': { id: '1023', name: '阿部 円香', role: '介護士', pin: '0211', hireDate: '', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' },
-            '1025': { id: '1025', name: '相澤美咲', role: '介護士', pin: '8627', hireDate: '', carriedOver: 0.0, currentGranted: 10.0, used: 0.0, status: '在職' }
-        };
-
-        function ensureStaffListNotEmpty() {
-            if (!staffList) staffList = [];
-
-            if (staffList.length > 0) {
-                staffList = deduplicateStaffList(staffList.map(normalizeStaffItem).filter(Boolean));
-                saveLocalData();
-                return;
-            }
-
-            const initialList = Object.values(DEFAULT_STAFF_MASTER).map(normalizeStaffItem);
-            staffList = deduplicateStaffList(initialList);
-            saveLocalData();
-        }
-
-        function saveLocalData() {
-            localStorage.setItem('kusunoki_staff_data', JSON.stringify(staffList));
-            localStorage.setItem('kusunoki_requests_data', JSON.stringify(requestList));
-        }
-
         function setLoginMode(mode) {
             currentLoginMode = mode;
             const loginError = document.getElementById('loginError');
@@ -2149,6 +1846,47 @@
             const pinEl = document.getElementById('loginPin');
             if (idEl) idEl.value = '';
             if (pinEl) pinEl.value = '';
+        }
+
+        function openPinResetModal() {
+            const p1 = document.getElementById('pinResetNewPin');
+            const p2 = document.getElementById('pinResetNewPinConfirm');
+            const err = document.getElementById('pinResetError');
+            if (p1) p1.value = '';
+            if (p2) p2.value = '';
+            if (err) err.classList.add('hidden');
+            const modal = document.getElementById('pinResetModal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        async function handlePinResetSubmit(e) {
+            if (e) e.preventDefault();
+            const newPin = normalizeNumber(document.getElementById('pinResetNewPin').value);
+            const confirmPin = normalizeNumber(document.getElementById('pinResetNewPinConfirm').value);
+            const errBox = document.getElementById('pinResetError');
+            const errMsg = document.getElementById('pinResetErrorMsg');
+
+            if (!/^\d{4}$/.test(newPin)) {
+                errMsg.textContent = '新しい暗証番号は4桁の数字で入力してください。';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            if (newPin !== confirmPin) {
+                errMsg.textContent = '新しい暗証番号の再入力が一致しません。';
+                errBox.classList.remove('hidden');
+                return;
+            }
+
+            const res = await apiCall('changePin', { newPin });
+            if (res && res.success) {
+                const modal = document.getElementById('pinResetModal');
+                if (modal) modal.classList.add('hidden');
+                showMainApp();
+                showToast('暗証番号を設定しました', 'fa-circle-check text-emerald-400');
+                return;
+            }
+            errMsg.textContent = res ? res.message : '暗証番号の設定に失敗しました。';
+            errBox.classList.remove('hidden');
         }
 
         async function handleLogin(e) {
@@ -2169,95 +1907,78 @@
                 if (btnText) btnText.textContent = "ログイン";
                 if (btnIcon) btnIcon.className = "fa-solid fa-arrow-right";
             }
-            // Direct Admin Login via Main Screen Form（即時判定で高速化）
-            if (idInput === 'admin' || idInput === 'kanri') {
-                resetBtnState();
-                let savedAdminPin = localStorage.getItem('kusunoki_admin_pin') || '147123';
-                if (savedAdminPin === '123456' || savedAdminPin === '1234') {
-                    savedAdminPin = '147123';
-                    localStorage.removeItem('kusunoki_admin_pin');
-                }
-                if (pinInput === savedAdminPin || pinInput === '147123') {
-                    currentUser = { id: 'admin', name: '管理者', role: '管理者', isAdmin: true };
-                    if (errorBox) errorBox.classList.add('hidden');
-                    clearLoginInputs();
-                    showMainApp();
-                    showToast('管理者としてログインしました');
-                    return;
-                } else {
-                    if (errorMsg) errorMsg.textContent = '管理者暗証番号が違います。';
-                    if (errorBox) errorBox.classList.remove('hidden');
-                    return;
-                }
-            }
 
             if (submitBtn) submitBtn.disabled = true;
             if (btnText) btnText.textContent = "認証中...";
             if (btnIcon) btnIcon.className = "fa-solid fa-spinner fa-spin";
 
-            ensureStaffListNotEmpty();
-            const staff = staffList.find(s => normalizeNumber(s.id) === idInput);
-            const staffPinFormatted = staff ? normalizeNumber(staff.pin || '').padStart(4, '0') : '';
-            const inputPinFormatted = pinInput.padStart(4, '0');
-            const is1004ValidPin = (idInput === '1004' && (inputPinFormatted === '7030' || inputPinFormatted === '0730' || pinInput === '730' || pinInput === '7030'));
-
-            if (isGasConfigured()) {
-                try {
-                    const res = await apiCall("login", { isAdmin: false, id: idInput, pin: pinInput });
-                    if (res && res.success) {
-                        // 【セキュリティ二重防御】GAS側が「0123」などの抜け道で誤って許可を返した場合でも、
-                        // スタッフ本人の正規の暗証番号と一致しない場合はフロント側で即座に拒否・ブロック！
-                        const realPin = normalizeNumber(res.user?.pin || staffPinFormatted).padStart(4, '0');
-                        const isPinMatched = (realPin === inputPinFormatted) || is1004ValidPin;
-                        
-                        if (!isPinMatched) {
-                            resetBtnState();
-                            if (errorMsg) errorMsg.textContent = '暗証番号が違います。';
-                            if (errorBox) errorBox.classList.remove('hidden');
-                            return;
-                        }
-
-                        resetBtnState();
-                        currentUser = res.user;
-                        if (errorBox) errorBox.classList.add('hidden');
-                        clearLoginInputs();
-                        showMainApp();
-                        showToast(`${currentUser.name} さん、ログインしました`);
-                        return;
-                    }
-                } catch (err) {
-                    console.warn("GAS login call failed, falling back to local:", err);
-                }
-            }
-
+            const res = await apiCall("login", { id: idInput, pin: pinInput });
             resetBtnState();
 
-            if (staff) {
-                if (staff.status === '退職') {
-                    if (errorMsg) errorMsg.textContent = 'このアカウントは退職処理されているためログインできません。';
-                    if (errorBox) errorBox.classList.remove('hidden');
+            if (res && res.success) {
+                setToken(res.token);
+                if (errorBox) errorBox.classList.add('hidden');
+                clearLoginInputs();
+
+                if (res.role === 'admin') {
+                    currentUser = { role: 'admin', id: 'admin', name: '管理者' };
+                    showMainApp();
+                    showToast('管理者としてログインしました');
                     return;
                 }
-                
-                // 本人の暗証番号のみで厳格判定（デバッグ用抜け道 1234 や 0000 は完全撤廃）
-                if (staffPinFormatted === inputPinFormatted || is1004ValidPin) {
-                    currentUser = staff;
-                    if (errorBox) errorBox.classList.add('hidden');
-                    clearLoginInputs();
-                    showMainApp();
-                    showToast(`${staff.name} さん、ログインしました`);
-                } else {
-                    if (errorMsg) errorMsg.textContent = '暗証番号が違います。';
-                    if (errorBox) errorBox.classList.remove('hidden');
+
+                currentUser = { role: 'staff', id: res.user.id, name: res.user.name, jobRole: res.user.role };
+
+                if (res.mustResetPin) {
+                    openPinResetModal();
+                    return;
                 }
-            } else {
-                if (errorMsg) errorMsg.textContent = '指定されたログインIDが見つかりません。';
-                if (errorBox) errorBox.classList.remove('hidden');
+
+                showMainApp();
+                showToast(`${currentUser.name} さん、ログインしました`);
+                return;
             }
+
+            if (errorMsg) errorMsg.textContent = loginErrorMessage(res);
+            if (errorBox) errorBox.classList.remove('hidden');
         }
 
         function handleLogout() {
+            // サーバーへのログアウト通知は raw fetch で行う（apiCall は AUTH_REQUIRED のとき
+            // handleLogout を呼ぶため、ここで apiCall を使うと無効化済みトークンで再帰する）
+            const token = getStoredToken();
+            if (token) {
+                fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'logout', token })
+                }).catch(() => {});
+            }
             currentUser = null;
+            staffList = [];
+            requestList = [];
+            viewingStaffId = null;
+            viewingStaffData = null;
+
+            // 開いているモーダル（暗証番号リセット等）をすべて閉じる。閉じないと、
+            // ログイン画面がモーダルの裏に隠れ、トークンなしの再送信が AUTH_REQUIRED を
+            // 繰り返すだけのループに陥る（リロードしないと抜けられない）。
+            ['pinResetModal', 'actionModal', 'confirmDialogModal', 'idNoticeModal', 'tempPinNoticeModal',
+                'sentNoticeModal', 'adminPinModal', 'staffPinModal', 'registerModal', 'leaveDaysModal',
+                'adminLoginModal', 'guideModal'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            // 編集中の申請state（と編集フォームの表示）もリセットする。同じ端末・タブで
+            // 別の職員がログインしたとき、前の利用者が編集していた申請を引き継がないようにする。
+            cancelEditRequest();
+            const myPageBanner = document.getElementById('staffMyPageViewBanner');
+            if (myPageBanner) myPageBanner.classList.add('hidden');
+            const myPageFormCard = document.getElementById('staffRequestFormCard');
+            if (myPageFormCard) myPageFormCard.classList.remove('hidden');
+            const myPagePinBtn = document.getElementById('staffPinChangeBtn');
+            if (myPagePinBtn) myPagePinBtn.classList.remove('hidden');
+            setToken(null);
             clearLoginInputs();
             const modalPin = document.getElementById('modalAdminPin');
             if (modalPin) modalPin.value = '';
@@ -2275,8 +1996,7 @@
         }
 
         function isUserAdmin(user) {
-            if (!user) return false;
-            return Boolean(user.isAdmin || user.role === '管理者' || user.id === 'admin' || String(user.id) === '1004');
+            return Boolean(user && user.role === 'admin');
         }
 
         function toggleAdminStaffView() {
@@ -2319,12 +2039,12 @@
             document.getElementById('userHeaderProfile').classList.add('flex');
 
             document.getElementById('headerUserName').textContent = currentUser.name;
-            document.getElementById('headerUserRole').textContent = currentUser.role || (currentUser.isAdmin ? '管理者' : 'スタッフ');
+            document.getElementById('headerUserRole').textContent = isUserAdmin(currentUser) ? '管理者' : (currentUser.jobRole || 'スタッフ');
 
             const switchBtn = document.getElementById('headerSwitchViewBtn');
 
-            // 1. 専用の管理者ログイン（147123またはID admin）からログインした場合のみ、直接管理者画面を表示
-            if (currentUser.id === 'admin') {
+            // 1. 専用の管理者ログイン（ID admin/kanri）からログインした場合のみ、直接管理者画面を表示
+            if (isUserAdmin(currentUser)) {
                 document.getElementById('staffView').classList.add('hidden');
                 document.getElementById('adminView').classList.remove('hidden');
                 setAdminSubTab('requests');
@@ -2370,8 +2090,14 @@
         }
 
         function refreshStaffCard() {
-            if (!currentUser || currentUser.id === 'admin') return;
-            const staff = staffList.find(s => String(s.id) === String(currentUser.id)) || currentUser;
+            let staff;
+            if (viewingStaffId && viewingStaffData) {
+                staff = viewingStaffData.staff;
+            } else {
+                if (!currentUser || isUserAdmin(currentUser)) return;
+                staff = staffList.find(s => String(s.id) === String(currentUser.id)) || currentUser;
+            }
+            if (!staff) return;
             const effectiveUsed = getStaffEffectiveUsed(staff);
             const totalRemaining = (parseFloat(staff.carriedOver) || 0) + (parseFloat(staff.currentGranted) || 0) - effectiveUsed;
             
@@ -2648,8 +2374,6 @@
             }
 
             const payload = {
-                staffId: currentUser.id,
-                staffName: currentUser.name,
                 type: finalType,
                 startDate,
                 endDate,
@@ -2663,72 +2387,31 @@
                     const targetReqId = editingRequestId;
                     payload.id = targetReqId;
 
-                    if (isGasConfigured()) {
-                        // GAS側は既存行を削除して新しい内容で再登録することで整合性を維持
-                        await apiCall("deleteRequest", { id: targetReqId, reqId: targetReqId });
-                        const res = await apiCall("submitRequest", payload);
-                        restoreSubmitBtn();
-                        if (res && res.success) {
-                            cancelEditRequest();
-                            showSentNoticeModal({ ...payload, isUpdate: true });
-                            await fetchLatestData();
-                            renderStaffRequests();
-                            showToast('申請内容を更新しました', 'fa-circle-check text-emerald-400');
-                            return;
-                        } else {
-                            showToast('更新エラーが発生しました', 'fa-circle-exclamation text-amber-400');
-                            return;
-                        }
-                    }
-
-                    // ローカル保持モード
-                    const reqIdx = requestList.findIndex(r => String(r.id) === String(targetReqId));
-                    if (reqIdx !== -1) {
-                        requestList[reqIdx] = {
-                            ...requestList[reqIdx],
-                            ...payload,
-                            status: '申請中',
-                            remandComment: ''
-                        };
-                    }
-                    saveLocalData();
-                    cancelEditRequest();
+                    const res = await apiCall("editRequest", payload);
                     restoreSubmitBtn();
-                    showSentNoticeModal({ ...payload, isUpdate: true });
-                    renderStaffRequests();
-                    showToast('申請内容を更新しました', 'fa-circle-check text-emerald-400');
+                    if (res && res.success) {
+                        cancelEditRequest();
+                        showSentNoticeModal({ ...payload, isUpdate: true });
+                        await fetchLatestData();
+                        renderStaffRequests();
+                        showToast('申請内容を更新しました', 'fa-circle-check text-emerald-400');
+                    } else {
+                        showToast(res ? res.message : '更新エラーが発生しました', 'fa-circle-exclamation text-amber-400');
+                    }
                     return;
                 }
 
                 // 通常の新規申請処理
-                if (isGasConfigured()) {
-                    const res = await apiCall("submitRequest", payload);
-                    restoreSubmitBtn();
-                    if (res && res.success) {
-                        document.getElementById('reqReason').value = '';
-                        showSentNoticeModal(payload);
-                        await fetchLatestData();
-                        renderStaffRequests();
-                        return;
-                    } else {
-                        showToast('送信エラーが発生しました', 'fa-circle-exclamation text-amber-400');
-                        return;
-                    }
-                }
-
-                const newReq = {
-                    id: 'REQ-' + Date.now().toString().slice(-5),
-                    ...payload,
-                    status: '申請中',
-                    remandComment: '',
-                    createdAt: new Date().toISOString().split('T')[0]
-                };
-                requestList.unshift(newReq);
-                saveLocalData();
-                document.getElementById('reqReason').value = '';
+                const res = await apiCall("submitRequest", payload);
                 restoreSubmitBtn();
-                showSentNoticeModal(payload);
-                renderStaffRequests();
+                if (res && res.success) {
+                    document.getElementById('reqReason').value = '';
+                    showSentNoticeModal(payload);
+                    await fetchLatestData();
+                    renderStaffRequests();
+                } else {
+                    showToast(res ? res.message : '送信エラーが発生しました', 'fa-circle-exclamation text-amber-400');
+                }
             } catch (err) {
                 restoreSubmitBtn();
                 showToast('送信処理中に例外が発生しました', 'fa-circle-exclamation text-rose-400');
@@ -2737,16 +2420,18 @@
 
         function renderStaffRequests() {
             const container = document.getElementById('staffRequestList');
-            if (!container || !currentUser) return;
+            if (!container) return;
 
-            const currentUserNameClean = currentUser.name ? currentUser.name.replace(/\s+/g, '') : '';
-            const myReqs = requestList.filter(r => {
-                const rNameClean = String(r.staffName || '').replace(/\s+/g, '');
-                if (rNameClean && currentUserNameClean) {
-                    return rNameClean === currentUserNameClean;
-                }
-                return String(r.staffId || '').trim() === String(currentUser.id);
-            });
+            let myReqs;
+            if (viewingStaffId && viewingStaffData) {
+                myReqs = viewingStaffData.requests || [];
+            } else {
+                if (!currentUser) return;
+                // サーバー（getMyData）は既にログイン中の staffId で絞り込んで返しているため、
+                // ここでの氏名再フィルタはしない。移行等で申請行の氏名（C列）が現在の氏名と
+                // 食い違っていても、本人の申請を取りこぼさないようにする。
+                myReqs = requestList;
+            }
 
             if (myReqs.length === 0) {
                 container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs">申請履歴はありません</div>`;
@@ -2766,8 +2451,8 @@
                 if (r.status === '差し戻し') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full text-[11px] font-bold">差し戻し</span>';
                 if (r.status === '却下') statusBadge = '<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[11px] font-bold">却下</span>';
 
-                // 承認前（申請中 または 差し戻し）の場合に編集・取り下げが可能
-                const canModify = (r.status === '申請中' || r.status === '差し戻し');
+                // 承認前（申請中 または 差し戻し）の場合に編集・取り下げが可能（管理者の閲覧時は操作不可）
+                const canModify = !viewingStaffId && (r.status === '申請中' || r.status === '差し戻し');
                 const periodText = formatJpPeriod(r.startDate, r.endDate);
 
                 return `
@@ -2816,24 +2501,18 @@
                 'bg-rose-600 hover:bg-rose-700 text-white',
                 'fa-trash-can',
                 async () => {
-                    // 同期しても復活しないよう削除ブラックリストに登録
-                    deletedRequestIds.add(String(reqId));
-                    saveTrackingCaches();
-
-                    if (isGasConfigured()) {
-                        await apiCall("deleteRequest", { id: reqId, reqId });
+                    const res = await apiCall("withdrawRequest", { id: reqId });
+                    if (res && res.success) {
+                        // もし現在編集中だった場合は編集モードを解除
+                        if (editingRequestId === String(reqId)) {
+                            cancelEditRequest();
+                        }
+                        showToast('申請を取り下げました', 'fa-trash-can text-slate-600');
+                        await fetchLatestData();
+                        renderStaffRequests();
+                    } else {
+                        showToast(res ? res.message : '取り下げに失敗しました', 'fa-circle-exclamation text-amber-400');
                     }
-
-                    requestList = requestList.filter(r => String(r.id) !== String(reqId));
-                    saveLocalData();
-
-                    // もし現在編集中だった場合は編集モードを解除
-                    if (editingRequestId === String(reqId)) {
-                        cancelEditRequest();
-                    }
-
-                    showToast('申請を取り下げました', 'fa-trash-can text-slate-600');
-                    renderStaffRequests();
                 }
             );
         }
@@ -2956,9 +2635,8 @@
             const selectedType = document.getElementById('searchTypeFilter') ? document.getElementById('searchTypeFilter').value : 'ALL';
             const selectedStatus = document.getElementById('searchStatusFilter') ? document.getElementById('searchStatusFilter').value : 'ALL';
 
-            // 選択されたスタッフの特定（名前の曖昧一致にも対応）
+            // 選択されたスタッフ（表示用のラベルに使う。絞り込み自体はIDで行う）
             const targetStaffObj = (selectedStaffId !== 'ALL') ? staffList.find(s => String(s.id) === String(selectedStaffId)) : null;
-            const targetStaffNameClean = targetStaffObj ? targetStaffObj.name.replace(/\s+/g, '') : '';
 
             let filtered = requestList.filter(r => {
                 // 1. ステータス判定
@@ -2978,21 +2656,11 @@
                     if (!reqMonth || reqMonth !== targetMonth) return false;
                 }
 
-                // 3. スタッフ判定（氏名による厳密一致、氏名不在時のみID判定）
+                // 3. スタッフ判定（職員IDで判定。移行後はB列が正規のIDに揃っているため、
+                //    氏名（C列）がリネーム等で現在の氏名と食い違っていても取りこぼさない）
                 if (selectedStaffId !== 'ALL') {
-                    const rStaffNameClean = String(r.staffName || '').replace(/\s+/g, '');
-                    const rStaffId = String(r.staffId || '').trim();
-
-                    if (rStaffNameClean) {
-                        // 申請データに氏名がある場合は、選択したスタッフの氏名と完全一致するもののみ（他人の混入を完全防止）
-                        if (!targetStaffNameClean || rStaffNameClean !== targetStaffNameClean) {
-                            return false;
-                        }
-                    } else {
-                        // 申請データに氏名がない場合のみ、IDで判定
-                        if (rStaffId !== String(selectedStaffId)) {
-                            return false;
-                        }
+                    if (String(r.staffId || '').trim() !== String(selectedStaffId)) {
+                        return false;
                     }
                 }
 
@@ -3346,13 +3014,10 @@
                         ${r.reason ? `<div class="text-xs bg-slate-50 p-2.5 rounded-lg text-slate-700">理由: ${escapeHtml(r.reason)}</div>` : ''}
 
                         <div class="flex justify-end items-center space-x-2 pt-1">
-                            ${r.status === '申請中' ? `
-                                <button onclick="openActionModal('${r.id}', 'remand')" class="bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg text-xs transition">差し戻し</button>
-                                <button onclick="openActionModal('${r.id}', 'reject')" class="bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold px-3 py-1.5 rounded-lg text-xs transition">却下</button>
-                                <button onclick="openActionModal('${r.id}', 'approve')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition shadow">承認</button>
-                            ` : `
-                                <span class="text-xs font-bold text-slate-500">判定済み: ${r.status}</span>
-                            `}
+                            ${r.status !== '申請中' ? `<span class="text-xs font-bold text-slate-500 mr-1">判定済み: ${escapeHtml(r.status)}</span>` : ''}
+                            ${r.status !== '差し戻し' ? `<button onclick="openActionModal('${r.id}', 'remand')" class="bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-lg text-xs transition">差し戻し</button>` : ''}
+                            ${r.status !== '却下' ? `<button onclick="openActionModal('${r.id}', 'reject')" class="bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold px-3 py-1.5 rounded-lg text-xs transition">却下</button>` : ''}
+                            ${r.status !== '承認' ? `<button onclick="openActionModal('${r.id}', 'approve')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition shadow">承認</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -3369,19 +3034,15 @@
                 'bg-rose-600 hover:bg-rose-700 text-white',
                 'fa-trash-can',
                 async () => {
-                    // 同期しても復活しないよう削除ブラックリストに登録
-                    deletedRequestIds.add(String(reqId));
-                    saveTrackingCaches();
-
-                    if (isGasConfigured()) {
-                        await apiCall("deleteRequest", { id: reqId, reqId });
+                    const res = await apiCall("deleteRequest", { id: reqId });
+                    if (res && res.success) {
+                        showToast('申請データを削除しました', 'fa-trash-can text-rose-400');
+                        await fetchLatestData();
+                        renderAdminRequests();
+                        if (activeAdminSubTab === 'search') renderAdminSearchResults();
+                    } else {
+                        showToast(res ? res.message : '削除に失敗しました', 'fa-circle-exclamation text-amber-400');
                     }
-
-                    requestList = requestList.filter(r => String(r.id) !== String(reqId));
-                    saveLocalData();
-                    showToast('申請データを削除しました', 'fa-trash-can text-rose-400');
-                    renderAdminRequests();
-                    if (activeAdminSubTab === 'search') renderAdminSearchResults();
                 }
             );
         }
@@ -3389,11 +3050,6 @@
         function renderStaffTable() {
             const tbody = document.getElementById('staffTableBody');
             if (!tbody) return;
-
-            // staffListが空の場合、即座にローカルデータまたはマスタから復元
-            if (!staffList || staffList.length === 0) {
-                loadLocalData();
-            }
 
             const searchInput = document.getElementById('staffSearchInput');
             const search = searchInput ? searchInput.value.trim().toLowerCase() : '';
@@ -3446,6 +3102,8 @@
                                 <button onclick="editStaff('${s.id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded text-[11px] font-bold transition flex items-center gap-1 shadow-xs" title="スタッフ情報の編集・消化リセット">
                                     <i class="fa-solid fa-pen text-[10px]"></i> 編集
                                 </button>
+                                <button onclick="openStaffMyPage('${s.id}')" class="bg-teal-100 hover:bg-teal-200 text-teal-800 px-2 py-1 rounded text-[11px] font-bold transition" title="マイページを見る">マイページを見る</button>
+                                <button onclick="confirmResetPin('${s.id}')" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 px-2 py-1 rounded text-[11px] font-bold transition" title="暗証番号をリセット">暗証番号をリセット</button>
                                 ${isRetired ? `
                                     <button onclick="confirmToggleRetire('${s.id}', '在職')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded text-[11px] font-bold transition" title="復職">復職</button>
                                 ` : `
@@ -3464,7 +3122,6 @@
             document.getElementById('registerModalTitle').innerHTML = '<i class="fa-solid fa-user-plus"></i> 新規スタッフ登録 (ID自動発行)';
             document.getElementById('regName').value = '';
             document.getElementById('regRole').value = '介護士';
-            document.getElementById('regPin').value = '0123';
             document.getElementById('regHireDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('regCarriedOver').value = '0';
             document.getElementById('regCurrentGranted').value = '10';
@@ -3502,25 +3159,16 @@
         async function handleStaffSave(e) {
             e.preventDefault();
             const editId = document.getElementById('editStaffTargetId').value;
-            const rawPin = document.getElementById('regPin').value;
-            const formattedPin = normalizeNumber(rawPin) ? normalizeNumber(rawPin).padStart(4, '0') : '0123';
             const hireDateVal = document.getElementById('regHireDate').value;
-
-            // 既存スタッフの場合は既存のステータス（在職/退職）を維持
-            const existingStaff = editId ? staffList.find(s => String(s.id) === String(editId)) : null;
-            const staffStatus = existingStaff ? (existingStaff.status || '在職') : '在職';
 
             const payload = {
                 id: editId,
                 name: document.getElementById('regName').value.trim(),
                 role: document.getElementById('regRole').value,
-                pin: formattedPin,
                 hireDate: hireDateVal,
-                joinedDate: hireDateVal,
                 carriedOver: parseFloat(document.getElementById('regCarriedOver').value) || 0,
                 currentGranted: parseFloat(document.getElementById('regCurrentGranted').value) || 0,
-                used: parseFloat(document.getElementById('regUsed').value) || 0,
-                status: staffStatus
+                used: parseFloat(document.getElementById('regUsed').value) || 0
             };
 
             const submitBtn = document.getElementById('regSubmitBtn');
@@ -3531,52 +3179,23 @@
             }
 
             try {
-                if (isGasConfigured()) {
-                    const actionName = editId ? "updateStaff" : "registerStaff";
-                    const res = await apiCall(actionName, payload);
-                    if (res && res.success) {
-                        // ローカル即時反映
-                        if (editId && existingStaff) {
-                            Object.assign(existingStaff, payload);
-                        } else if (!editId) {
-                            const newStaffId = String(res.newId || (Math.max(...staffList.map(s => parseInt(normalizeNumber(s.id)) || 1000), 1000) + 1));
-                            staffList.push({ ...payload, id: newStaffId });
-                        }
-                        saveLocalData();
-                        closeRegisterModal();
-                        await fetchLatestData();
+                const actionName = editId ? "updateStaff" : "registerStaff";
+                const res = await apiCall(actionName, payload);
+                if (res && res.success) {
+                    closeRegisterModal();
+                    await fetchLatestData();
 
-                        if (!editId && res.newId) {
-                            showIssuedIdModal(res.newId);
-                        } else {
-                            showToast(res.message || `${payload.name} さんの情報を更新しました`, 'fa-circle-check text-emerald-400');
-                        }
-                        if (currentUser && isUserAdmin(currentUser)) {
-                            renderStaffTable();
-                            initSearchFilters();
-                        }
-                        return;
+                    if (!editId && res.id) {
+                        showIssuedIdModal(res.id);
                     } else {
-                        showToast('スプレッドシートへの保存に失敗しました。再試行してください', 'fa-circle-exclamation text-amber-400');
+                        showToast(res.message || `${payload.name} さんの情報を更新しました`, 'fa-circle-check text-emerald-400');
                     }
-                }
-
-                // ローカル保持モード
-                if (editId) {
-                    const staff = staffList.find(s => String(s.id) === String(editId));
-                    if (staff) Object.assign(staff, payload);
-                    showToast(`${payload.name} さんの情報を更新しました`, 'fa-circle-check text-emerald-400');
+                    if (currentUser && isUserAdmin(currentUser)) {
+                        renderStaffTable();
+                        initSearchFilters();
+                    }
                 } else {
-                    const nextId = (Math.max(...staffList.map(s => parseInt(normalizeNumber(s.id)) || 1000), 1000) + 1).toString();
-                    staffList.push({ ...payload, id: nextId });
-                    showIssuedIdModal(nextId);
-                }
-
-                saveLocalData();
-                closeRegisterModal();
-                if (currentUser && isUserAdmin(currentUser)) {
-                    renderStaffTable();
-                    initSearchFilters();
+                    showToast(res ? res.message : 'スプレッドシートへの保存に失敗しました。再試行してください', 'fa-circle-exclamation text-amber-400');
                 }
             } finally {
                 if (submitBtn) {
@@ -3682,49 +3301,25 @@
 
             const targetStaffId = currentQuickStaff.id;
             const staffName = currentQuickStaff.name;
-
-            // もしリセット直後（currentQuickStaff.used === 0）なら 0.0 を確実にGASに保存
-            const effectiveUsed = getStaffEffectiveUsed(currentQuickStaff);
-            const savedUsed = (currentQuickStaff.used === 0 && effectiveUsed === 0) ? 0.0 : (parseFloat(currentQuickStaff.used) || effectiveUsed);
+            const usedVal = getStaffEffectiveUsed(currentQuickStaff);
 
             const payload = {
                 id: targetStaffId,
-                name: staffName,
-                role: currentQuickStaff.role || '介護士',
-                pin: currentQuickStaff.pin || '0123',
-                hireDate: currentQuickStaff.hireDate || '',
-                joinedDate: currentQuickStaff.hireDate || '',
                 carriedOver: carriedOver,
                 currentGranted: currentGranted,
-                used: savedUsed,
-                status: currentQuickStaff.status || '在職'
+                used: usedVal
             };
 
             try {
-                // ローカル状態を即時更新
-                currentQuickStaff.carriedOver = carriedOver;
-                currentQuickStaff.currentGranted = currentGranted;
-
-                const targetInList = staffList.find(s => String(s.id) === String(targetStaffId));
-                if (targetInList) {
-                    targetInList.carriedOver = carriedOver;
-                    targetInList.currentGranted = currentGranted;
-                }
-                saveLocalData();
-
-                if (isGasConfigured()) {
-                    const res = await apiCall("updateStaff", payload);
-                    if (res && res.success) {
-                        showToast(`${staffName} 様の有休日数（前年繰越: ${carriedOver.toFixed(1)}日 / 今年度付与: ${currentGranted.toFixed(1)}日）を保存しました`, 'fa-circle-check text-emerald-400');
-                    } else {
-                        showToast('スプレッドシートへの保存で通信確認が必要です（画面には保存済）', 'fa-triangle-exclamation text-amber-400');
-                    }
+                const res = await apiCall("updateStaff", payload);
+                if (res && res.success) {
+                    showToast(`${staffName} 様の有休日数（前年繰越: ${carriedOver.toFixed(1)}日 / 今年度付与: ${currentGranted.toFixed(1)}日）を保存しました`, 'fa-circle-check text-emerald-400');
+                    closeLeaveDaysModal();
+                    await fetchLatestData();
+                    renderStaffTable();
                 } else {
-                    showToast(`${staffName} 様の有休日数を更新しました`, 'fa-circle-check text-emerald-400');
+                    showToast(res ? res.message : '保存に失敗しました', 'fa-circle-exclamation text-amber-400');
                 }
-
-                closeLeaveDaysModal();
-                renderStaffTable();
             } catch (err) {
                 console.error(err);
                 showToast('保存中にエラーが発生しました', 'fa-circle-exclamation text-rose-400');
@@ -3753,12 +3348,7 @@
             // 3. 新・今年度付与（勤続年数に応じた法定日数）
             const newGranted = getLegalGrantDays(staff.hireDate);
 
-            // 4. リセット日を今日の日付（YYYY-MM-DD）に設定
-            const today = new Date();
-            // 付与月の初日（YYYY-MM-01）を基準日とし、前月以前の消化を確実にリセット
-            const resetDateYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-            setStaffResetDate(staff.id, resetDateYmd);
-            staff.usedResetDate = resetDateYmd;
+            // 4. 消化済を0にリセット
             staff.used = 0.0;
 
             // 5. モーダルの入力欄を更新
@@ -3780,16 +3370,8 @@
             // 消化済入力欄を0に
             document.getElementById('regUsed').value = '0';
 
-            // リセット基準日（付与月または当月の1日）を記録し、過去の届出が再読み込みされて復活するのを防止
-            const today = new Date();
-            const resetDateYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-
-            if (editId) {
-                setStaffResetDate(editId, resetDateYmd);
-                if (staff) {
-                    staff.usedResetDate = resetDateYmd;
-                    staff.used = 0.0;
-                }
+            if (editId && staff) {
+                staff.used = 0.0;
             }
 
             const staffName = staff ? staff.name : 'スタッフ';
@@ -3813,11 +3395,6 @@
             const hireDateStr = document.getElementById('regHireDate').value || staff.hireDate;
             const newGranted = getLegalGrantDays(hireDateStr);
 
-            const today = new Date();
-            // 付与月の初日（YYYY-MM-01）を基準日とし、前月以前の消化を確実にリセット
-            const resetDateYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
-            setStaffResetDate(staff.id, resetDateYmd);
-            staff.usedResetDate = resetDateYmd;
             staff.used = 0.0;
 
             document.getElementById('regCarriedOver').value = newCarried.toFixed(1);
@@ -3835,7 +3412,6 @@
             document.getElementById('registerModalTitle').innerHTML = `<i class="fa-solid fa-user-pen"></i> スタッフ情報編集 (ID: ${staff.id})`;
             document.getElementById('regName').value = staff.name;
             document.getElementById('regRole').value = staff.role || '介護士';
-            document.getElementById('regPin').value = staff.pin || '0123';
             document.getElementById('regHireDate').value = staff.hireDate || '';
             document.getElementById('regCarriedOver').value = staff.carriedOver || 0;
             document.getElementById('regCurrentGranted').value = staff.currentGranted || 0;
@@ -3859,20 +3435,14 @@
             const btnColor = isRetire ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white';
 
             openConfirmDialog(title, desc, isRetire ? '退職にする' : '復職させる', btnColor, 'fa-user-slash', async () => {
-                if (isGasConfigured()) {
-                    const res = await apiCall("toggleRetireStaff", { id, status: targetStatus });
-                    if (res && res.success) {
-                        showToast(res.message || 'ステータスを変更しました');
-                        await fetchLatestData();
-                        renderStaffTable();
-                        return;
-                    }
+                const res = await apiCall("toggleRetireStaff", { id, status: targetStatus });
+                if (res && res.success) {
+                    showToast(res.message || `「${staff.name}」さんのステータスを【${targetStatus}】に変更しました`);
+                    await fetchLatestData();
+                    renderStaffTable();
+                } else {
+                    showToast(res ? res.message : '変更に失敗しました', 'fa-circle-exclamation text-amber-400');
                 }
-
-                staff.status = targetStatus;
-                saveLocalData();
-                showToast(`「${staff.name}」さんのステータスを【${targetStatus}】に変更しました`);
-                renderStaffTable();
             });
         }
 
@@ -3887,22 +3457,97 @@
                 'bg-rose-600 hover:bg-rose-700 text-white',
                 'fa-trash-can',
                 async () => {
-                    if (isGasConfigured()) {
-                        const res = await apiCall("deleteStaff", { id });
-                        if (res && res.success) {
-                            showToast('スタッフデータを削除しました', 'fa-trash-can text-rose-400');
-                            await fetchLatestData();
-                            renderStaffTable();
-                            return;
-                        }
+                    const res = await apiCall("deleteStaff", { id });
+                    if (res && res.success) {
+                        showToast('スタッフデータを削除しました', 'fa-trash-can text-rose-400');
+                        await fetchLatestData();
+                        renderStaffTable();
+                    } else {
+                        showToast(res ? res.message : '削除に失敗しました', 'fa-circle-exclamation text-amber-400');
                     }
-
-                    staffList = staffList.filter(s => s.id !== id);
-                    saveLocalData();
-                    showToast('スタッフデータを削除しました', 'fa-trash-can text-rose-400');
-                    renderStaffTable();
                 }
             );
+        }
+
+        // 管理者が職員のマイページを閲覧専用（見るだけ）で開く
+        async function openStaffMyPage(staffId) {
+            const res = await apiCall('getStaffView', { staffId });
+            if (!res || !res.success) {
+                showToast(res ? res.message : 'マイページの取得に失敗しました', 'fa-circle-exclamation text-amber-400');
+                return;
+            }
+
+            viewingStaffId = staffId;
+            viewingStaffData = { staff: res.user, requests: res.requests || [] };
+
+            document.getElementById('adminView').classList.add('hidden');
+            document.getElementById('staffView').classList.remove('hidden');
+
+            const banner = document.getElementById('staffMyPageViewBanner');
+            const bannerName = document.getElementById('staffMyPageViewName');
+            if (bannerName) bannerName.textContent = res.user.name;
+            if (banner) banner.classList.remove('hidden');
+
+            const formCard = document.getElementById('staffRequestFormCard');
+            const pinBtn = document.getElementById('staffPinChangeBtn');
+            if (formCard) formCard.classList.add('hidden');
+            if (pinBtn) pinBtn.classList.add('hidden');
+
+            refreshStaffCard();
+            renderStaffRequests();
+        }
+
+        // マイページ閲覧を終えて管理画面に戻る
+        function closeStaffMyPage() {
+            viewingStaffId = null;
+            viewingStaffData = null;
+
+            const banner = document.getElementById('staffMyPageViewBanner');
+            if (banner) banner.classList.add('hidden');
+
+            const formCard = document.getElementById('staffRequestFormCard');
+            const pinBtn = document.getElementById('staffPinChangeBtn');
+            if (formCard) formCard.classList.remove('hidden');
+            if (pinBtn) pinBtn.classList.remove('hidden');
+
+            document.getElementById('staffView').classList.add('hidden');
+            document.getElementById('adminView').classList.remove('hidden');
+            setAdminSubTab(activeAdminSubTab || 'staff');
+        }
+
+        // 暗証番号のリセット（確認のうえ、仮の暗証番号を発行する）
+        function confirmResetPin(id) {
+            const staff = staffList.find(s => s.id === id);
+            if (!staff) return;
+
+            openConfirmDialog(
+                `「${staff.name}」さんの暗証番号をリセットしますか？`,
+                '新しい仮の暗証番号を発行します。ご本人にお伝えのうえ、次回ログイン時に新しい暗証番号を再設定していただいてください。',
+                'リセットする',
+                'bg-amber-600 hover:bg-amber-700 text-white',
+                'fa-key',
+                async () => {
+                    const res = await apiCall('resetPin', { id });
+                    if (res && res.success) {
+                        showTempPinModal(staff.name, res.tempPin);
+                        await fetchLatestData();
+                        renderStaffTable();
+                    } else {
+                        showToast(res ? res.message : '暗証番号のリセットに失敗しました', 'fa-circle-exclamation text-amber-400');
+                    }
+                }
+            );
+        }
+
+        function showTempPinModal(name, tempPin) {
+            document.getElementById('tempPinStaffName').textContent = name;
+            document.getElementById('tempPinValue').textContent = tempPin;
+            document.getElementById('tempPinNoticeModal').classList.remove('hidden');
+        }
+
+        function closeTempPinModal() {
+            document.getElementById('tempPinNoticeModal').classList.add('hidden');
+            document.getElementById('tempPinValue').textContent = '----';
         }
 
         function isQuickApproveEnabled() {
@@ -3977,89 +3622,36 @@
                 return;
             }
 
-            const actionStatusMap = {
-                'approve': '承認',
-                'remand': '差し戻し',
-                'reject': '却下'
-            };
-            const targetStatus = actionStatusMap[selectedAction] || selectedAction;
             const targetReqId = selectedRequestId;
             const targetAction = selectedAction;
+            const req = requestList.find(r => String(r.id) === String(targetReqId));
+            const staffName = req ? req.staffName : '';
 
-            // ① モーダルを直ちに閉じる（待ち時間0秒化）
             closeActionModal();
 
-            // ② キャッシュとローカルメモリを即時更新
-            processedRequestMap.set(String(targetReqId), {
-                status: targetStatus,
-                remandComment: comment
+            const res = await apiCall("processRequest", {
+                id: targetReqId,
+                actionType: targetAction,
+                comment
             });
-            saveTrackingCaches();
 
-            const req = requestList.find(r => String(r.id) === String(targetReqId));
-            let staffToUpdate = null;
-            if (req) {
-                req.status = targetStatus;
+            if (res && res.success) {
                 if (targetAction === 'approve') {
-                    const rType = String(req.type || '');
-                    if (rType.includes('有給') || rType.includes('有休') || rType.includes('年休')) {
-                        const staff = findStaffForRequest(req);
-                        if (staff) {
-                            let leaveDays = parseFloat(req.days);
-                            if (isNaN(leaveDays) || leaveDays <= 0) {
-                                leaveDays = rType.includes('半休') ? 0.5 : 1.0;
-                            }
-                            staff.used = parseFloat(((parseFloat(staff.used) || 0) + leaveDays).toFixed(1));
-                            staffToUpdate = staff;
-                        }
-                    }
-                    showToast(`${escapeHtml(req.staffName || '')}さんの申請を承認しました`);
+                    showToast(`${escapeHtml(staffName || '')}さんの申請を承認しました`);
                 } else if (targetAction === 'remand') {
-                    req.remandComment = comment;
                     showToast('差し戻し処理を完了しました');
                 } else if (targetAction === 'reject') {
                     showToast('申請を却下しました', 'fa-circle-xmark text-rose-400');
                 }
-                saveLocalData();
+                updateSyncBadge(true);
+            } else {
+                showToast(res ? res.message : '処理に失敗しました', 'fa-circle-exclamation text-amber-400');
             }
 
-            // ③ 画面のカード一覧を即座に再描画（0.01秒で「承認済み」へ切り替え）
+            await fetchLatestData();
             renderAdminRequests();
             if (activeAdminSubTab === 'search') {
                 renderAdminSearchResults();
-            }
-
-            // ④ Googleスプレッドシート（GAS）への同期書き込みは裏側（非同期）で即時送信
-            if (isGasConfigured()) {
-                apiCall("processRequest", {
-                    reqId: targetReqId,
-                    id: targetReqId,
-                    status: targetStatus,
-                    actionType: targetAction,
-                    reqAction: targetAction,
-                    comment
-                }).then(res => {
-                    if (res && res.success) {
-                        updateSyncBadge(true);
-                    }
-                }).catch(err => {
-                    console.error("GAS processRequest background error:", err);
-                });
-
-                if (staffToUpdate) {
-                    apiCall("updateStaff", {
-                        id: staffToUpdate.id,
-                        name: staffToUpdate.name,
-                        role: staffToUpdate.role,
-                        pin: staffToUpdate.pin,
-                        hireDate: staffToUpdate.hireDate,
-                        joinedDate: staffToUpdate.hireDate,
-                        carriedOver: staffToUpdate.carriedOver,
-                        currentGranted: staffToUpdate.currentGranted,
-                        used: staffToUpdate.used,
-                        status: staffToUpdate.status
-                    }).catch(err => console.error("GAS updateStaff background error:", err));
-                }
             }
         }
 
@@ -4076,35 +3668,20 @@
             showToast('バックアップファイルを保存しました');
         }
 
-        function importBackupData() {
-            document.getElementById('importFileInput').click();
-        }
-
-        function handleFileImport(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                try {
-                    const parsed = JSON.parse(evt.target.result);
-                    if (parsed.staff && parsed.requests) {
-                        staffList = parsed.staff;
-                        requestList = parsed.requests;
-                        saveLocalData();
-                        showToast('データを正常に復元しました');
-                        if (currentUser) showMainApp();
-                    }
-                } catch (err) {
-                    showToast('ファイルの読み込みに失敗しました', 'fa-circle-exclamation text-rose-400');
-                }
-            };
-            reader.readAsText(file);
+        // 旧クライアント（リビルド前）が残していた localStorage を消す。
+        // 旧キーには職員データや平文PINが入っていたことがあるため、戻ってきた利用者の
+        // ブラウザに残っていれば消す。kusunoki_admin_sort_order / kusunoki_quick_approve
+        // （UIの好み設定のみ）はこの対象に含めない。
+        function clearLegacyLocalStorage_() {
+            try {
+                ['kusunoki_staff_data', 'kusunoki_requests_data', 'kusunoki_admin_pin',
+                    'kusunoki_deleted_requests', 'kusunoki_processed_requests', 'kusunoki_staff_reset_dates']
+                    .forEach(key => localStorage.removeItem(key));
+            } catch (e) { /* no-op */ }
         }
 
         window.onload = function() {
-            loadLocalData();
-            fetchLatestData();
+            clearLegacyLocalStorage_();
             setLoginMode('staff');
         };
     </script>
