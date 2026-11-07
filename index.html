@@ -288,7 +288,7 @@
                                 <div id="regularTimeArea" class="hidden bg-amber-50/70 p-2.5 rounded-lg border border-amber-200/80">
                                     <span class="text-[11px] font-bold text-amber-900 block mb-1">本来の勤務時間（定時シフト）</span>
                                     <select id="reqRegShift" aria-label="シフトを選ぶ" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold mb-2"
-                                        onchange="if(this.value){const [s,e]=this.value.split('-');document.getElementById('reqRegStartTime').value=s;document.getElementById('reqRegEndTime').value=e;}">
+                                        onchange="applyRegShift(this.value)">
                                         <option value="">シフトを選ぶ（時刻が自動で入ります）</option>
                                         <option value="07:00-16:00">早番 7:00～16:00</option>
                                         <option value="09:00-18:00">日勤 9:00～18:00</option>
@@ -302,11 +302,11 @@
                                     <div class="grid grid-cols-2 gap-2 items-center">
                                         <div>
                                             <span class="text-[10px] text-amber-700 block">定時 開始</span>
-                                            <input type="time" id="reqRegStartTime" value="09:00" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
+                                            <input type="time" id="reqRegStartTime" value="09:00" onchange="syncOvertimeFromReg()" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
                                         </div>
                                         <div>
                                             <span class="text-[10px] text-amber-700 block">定時 終了</span>
-                                            <input type="time" id="reqRegEndTime" value="18:00" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
+                                            <input type="time" id="reqRegEndTime" value="18:00" onchange="syncOvertimeFromReg()" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold">
                                         </div>
                                     </div>
                                 </div>
@@ -2124,6 +2124,24 @@
             document.getElementById('staffCardCarriedOver').textContent = (staff.carriedOver || 0).toFixed(1);
             document.getElementById('staffCardCurrentGranted').textContent = (staff.currentGranted || 0).toFixed(1);
             document.getElementById('staffCardUsed').textContent = effectiveUsed.toFixed(1);
+        }
+
+        function applyRegShift(val) {
+            if (!val) return;
+            const [s, e] = val.split('-');
+            document.getElementById('reqRegStartTime').value = s;
+            document.getElementById('reqRegEndTime').value = e;
+            syncOvertimeFromReg();
+        }
+
+        // 残業は定時終了から始まり、早出は定時開始で終わる
+        function syncOvertimeFromReg() {
+            const type = document.getElementById('reqType').value;
+            if (type === '残業申請書') {
+                document.getElementById('reqStartTime').value = document.getElementById('reqRegEndTime').value;
+            } else if (type === '早出申請書') {
+                document.getElementById('reqEndTime').value = document.getElementById('reqRegStartTime').value;
+            }
         }
 
         function handleReqTypeChange() {
