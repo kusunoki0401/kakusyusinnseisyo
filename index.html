@@ -287,6 +287,18 @@
 
                                 <div id="regularTimeArea" class="hidden bg-amber-50/70 p-2.5 rounded-lg border border-amber-200/80">
                                     <span class="text-[11px] font-bold text-amber-900 block mb-1">本来の勤務時間（定時シフト）</span>
+                                    <select id="reqRegShift" aria-label="シフトを選ぶ" class="w-full border border-slate-300 rounded-lg p-2 text-xs bg-white font-bold mb-2"
+                                        onchange="if(this.value){const [s,e]=this.value.split('-');document.getElementById('reqRegStartTime').value=s;document.getElementById('reqRegEndTime').value=e;}">
+                                        <option value="">シフトを選ぶ（時刻が自動で入ります）</option>
+                                        <option value="07:00-16:00">早番 7:00～16:00</option>
+                                        <option value="09:00-18:00">日勤 9:00～18:00</option>
+                                        <option value="09:30-18:30">日勤② 9:30～18:30</option>
+                                        <option value="10:00-19:00">日勤③ 10:00～19:00</option>
+                                        <option value="16:00-10:00">夜勤 16:00～10:00（翌朝）</option>
+                                        <option value="08:00-17:00">看① 8:00～17:00</option>
+                                        <option value="08:30-17:30">看② 8:30～17:30</option>
+                                        <option value="09:00-18:00">看③ 9:00～18:00</option>
+                                    </select>
                                     <div class="grid grid-cols-2 gap-2 items-center">
                                         <div>
                                             <span class="text-[10px] text-amber-700 block">定時 開始</span>
@@ -2266,6 +2278,8 @@
                 if (etEl) etEl.value = endTime;
                 if (rstEl) rstEl.value = regStartTime;
                 if (retEl) retEl.value = regEndTime;
+                const shiftEl = document.getElementById('reqRegShift');
+                if (shiftEl) shiftEl.value = `${regStartTime}-${regEndTime}`; // 該当シフトが無ければ未選択表示になる
 
                 const breakRadio = document.querySelector(`input[name="reqBreakType"][value="${breakVal}"]`);
                 if (breakRadio) breakRadio.checked = true;
