@@ -1291,6 +1291,8 @@
 
         let staffList = [];
         let requestList = [];
+        let leaveYears = [];
+        let leaveHistory = [];
 
         // 管理者が職員のマイページを閲覧中（見るだけ）のときに使う状態
         let viewingStaffId = null;
@@ -1749,6 +1751,8 @@
                 if (res && res.success) {
                     staffList = res.staffList || [];
                     requestList = res.requestList || [];
+                    leaveYears = res.leaveYears || [];
+                    leaveHistory = res.leaveHistory || [];
                     updateSyncBadge(true);
                 }
             } else {
@@ -3168,40 +3172,52 @@
             if (!win) { showToast('ポップアップがブロックされました。許可してください', 'fa-circle-exclamation text-amber-400'); return; }
             renderLeaveLedger(win, staffId, null);
         }
-        function renderLeaveLedger(win, staffId, startYear) {
+        // startKey: 年度の開始日(yyyy-mm-dd)。null なら現在の年度
+        function renderLeaveLedger(win, staffId, startKey) {
             const s = staffList.find(x => String(x.id) === String(staffId));
             if (!s) { win.close(); return; }
-            const gm = formatJapaneseDate(s.hireDate).grantMonth;
-            if (gm === '--') { win.close(); showToast('入社日が未設定のため台帳を作れません', 'fa-circle-exclamation text-amber-400'); return; }
-            const curY = ledgerCurrentStartYear(gm);
-            const sy = startYear || curY;
-            const isCurrent = sy === curY;
-            const start = `${sy}-${String(gm).padStart(2, '0')}-01`;
-            const endD = new Date(sy + 1, gm - 1, 0); // 翌年の付与月の前日
-            const end = ledgerYmd(endD);
             const sid = String(s.id);
-            const rows = requestList
+            const gm = formatJapaneseDate(s.hireDate).grantMonth;
+            const imported = leaveYears.filter(y => String(y.staffId) === sid).map(y => ({ ...y, start: ledgerYmd(y.start), end: ledgerYmd(y.end) }));
+            if (gm === '--' && !imported.length) { win.close(); showToast('入社日が未設定のため台帳を作れません', 'fa-circle-exclamation text-amber-400'); return; }
+            const todayYmd = ledgerYmd(new Date());
+            const inToday = imported.find(y => y.start <= todayYmd && todayYmd <= y.end);
+            const curStart = inToday ? inToday.start : `${ledgerCurrentStartYear(gm)}-${String(gm).padStart(2, '0')}-01`;
+            const key = startKey || curStart;
+            const imp = imported.find(y => y.start === key);
+            const isCurrent = key === curStart;
+            const start = key;
+            const end = imp ? imp.end : ledgerYmd(new Date(Number(key.slice(0, 4)) + 1, Number(key.slice(5, 7)) - 1, 0));
+            const hasTotal = isCurrent || !!imp;
+            const carried = isCurrent ? (parseFloat(s.carriedOver) || 0) : (imp ? Number(imp.carried) || 0 : 0);
+            const granted = isCurrent ? (parseFloat(s.currentGranted) || 0) : (imp ? Number(imp.granted) || 0 : 0);
+            const total = carried + granted;
+            const rows = leaveHistory
+                .filter(h => String(h.staffId) === sid)
+                .map(h => ({ s: ledgerYmd(h.start), e: ledgerYmd(h.end || h.start), days: parseFloat(h.days) || 0, note: h.note || '' }));
+            requestList
                 .filter(r => String(r.type || '').includes('有給') && isApprovedStatus(r.status))
                 .filter(r => { const rs = findStaffForRequest(r); return rs && String(rs.id) === sid; })
-                .map(r => ({ s: ledgerYmd(r.startDate), e: ledgerYmd(r.endDate || r.startDate), days: parseFloat(r.days) || 0, type: r.type, reason: r.reason }))
-                .filter(r => r.s >= start && r.s <= end)
-                .sort((a, b) => a.s.localeCompare(b.s));
-            const total = (parseFloat(s.carriedOver) || 0) + (parseFloat(s.currentGranted) || 0);
+                .forEach(r => {
+                    const rs0 = ledgerYmd(r.startDate), days = parseFloat(r.days) || 0;
+                    if (rows.some(x => x.s === rs0 && x.days === days)) return; // 取り込み済みと重複
+                    const half = String(r.type).match(/午前半休|午後半休/);
+                    rows.push({ s: rs0, e: ledgerYmd(r.endDate || r.startDate), days, note: [half ? half[0] : '', r.reason || ''].filter(Boolean).join(' ') });
+                });
+            const inPeriod = rows.filter(r => r.s >= start && r.s <= end).sort((a, b) => a.s.localeCompare(b.s));
             let used = 0;
-            const body = rows.map(r => {
+            const body = inPeriod.map(r => {
                 used += r.days;
-                const half = String(r.type).match(/午前半休|午後半休/);
-                const note = [half ? half[0] : '', r.reason || ''].filter(Boolean).join(' ');
                 const period = r.s === r.e ? ledgerWareki(r.s) : `${ledgerWareki(r.s)} ～ ${ledgerWareki(r.e)}`;
-                return `<tr><td>${period}</td><td class="n">${r.days.toFixed(1)}</td><td class="n">${isCurrent ? (total - used).toFixed(1) : ''}</td><td class="note">${escapeHtml(note)}</td></tr>`;
+                return `<tr><td>${period}</td><td class="n">${r.days.toFixed(1)}</td><td class="n">${hasTotal ? (total - used).toFixed(1) : ''}</td><td class="note">${escapeHtml(r.note)}</td></tr>`;
             });
             while (body.length < 20) body.push('<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>');
-            const years = [];
-            for (let y = curY; y >= curY - 4; y--) years.push(y);
-            const opts = years.map(y => `<option value="${y}" ${y === sy ? 'selected' : ''}>${y}年度（${y}年${gm}月～）</option>`).join('');
-            const g = v => isCurrent ? v.toFixed(1) : '—';
+            const starts = [...new Set([curStart, ...imported.map(y => y.start)])].sort().reverse();
+            const opts = starts.map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${ledgerWareki(k)} ～</option>`).join('');
+            const g = v => hasTotal ? v.toFixed(1) : '—';
+            const label = `${start.slice(0, 4)}年度`;
             win.document.open();
-            win.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>有給休暇台帳_${escapeHtml(s.name)}_${sy}年度</title>
+            win.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>有給休暇台帳_${escapeHtml(s.name)}_${label}</title>
 <style>
 @page { size: A4 portrait; margin: 12mm; }
 body { font-family: "Yu Gothic","Meiryo",sans-serif; font-size: 12px; color: #000; margin: 0; padding: 12px; }
@@ -3215,18 +3231,18 @@ th { background: #e8eef7; font-weight: normal; }
 .info th { width: 16%; } .info td { width: 17%; }
 .rec td { height: 24px; } .rec th { text-align: center; }
 </style></head><body>
-<div class="bar"><select id="yr" onchange="opener.renderLeaveLedger(window, '${sid}', Number(this.value))">${opts}</select>
+<div class="bar"><select id="yr" onchange="opener.renderLeaveLedger(window, '${sid}', this.value)">${opts}</select>
 <button onclick="window.print()">印刷 / PDFで保存</button> <span>（送信先を「PDFに保存」にするとPDFになります）</span></div>
 <h1>年次有給休暇取得管理台帳</h1>
 <table class="info">
-<tr><th>年度</th><td>${sy}年度分</td><th>対象期間</th><td colspan="3">${ledgerWareki(start)} ～ ${ledgerWareki(end)}</td></tr>
+<tr><th>年度</th><td>${label}分</td><th>対象期間</th><td colspan="3">${ledgerWareki(start)} ～ ${ledgerWareki(end)}</td></tr>
 <tr><th>氏名</th><td>${escapeHtml(s.name)}</td><th>職種</th><td>${escapeHtml(s.role || '')}</td><th>スタッフID</th><td>${escapeHtml(sid)}</td></tr>
 <tr><th>入社年月日</th><td>${s.hireDate ? ledgerWareki(ledgerYmd(s.hireDate)) : ''}</td><th>基準日（付与日）</th><td>${ledgerWareki(start)}</td><th>勤続</th><td>${formatJapaneseDate(s.hireDate).durationText}</td></tr>
-<tr><th>前年繰越日数</th><td class="n">${g(parseFloat(s.carriedOver) || 0)}</td><th>今年度付与日数</th><td class="n">${g(parseFloat(s.currentGranted) || 0)}</td><th>合計付与日数</th><td class="n">${g(total)}</td></tr>
-<tr><th>使用日数合計</th><td class="n">${used.toFixed(1)}</td><th>残日数</th><td class="n">${isCurrent ? (total - used).toFixed(1) : '—'}</td><th colspan="2"></th></tr>
+<tr><th>前年繰越日数</th><td class="n">${g(carried)}</td><th>今年度付与日数</th><td class="n">${g(granted)}</td><th>合計付与日数</th><td class="n">${g(total)}</td></tr>
+<tr><th>使用日数合計</th><td class="n">${used.toFixed(1)}</td><th>残日数</th><td class="n">${hasTotal ? (total - used).toFixed(1) : '—'}</td><th colspan="2"></th></tr>
 </table><br>
 <table class="rec"><tr><th>取得月日（承認済）</th><th>使用日数</th><th>残日数</th><th>備考</th></tr>${body.join('')}</table>
-<p style="font-size:10px">出力日: ${ledgerWareki(ledgerYmd(new Date()))}　※承認済みの有給届のみ記載。残日数は「前年繰越＋今年度付与」から累計で差し引いた値。</p>
+<p style="font-size:10px">出力日: ${ledgerWareki(todayYmd)}　※承認済みの有給届と、取り込み済みの過去の有給管理簿を記載。残日数は「前年繰越＋今年度付与」から累計で差し引いた値。</p>
 </body></html>`);
             win.document.close();
         }
